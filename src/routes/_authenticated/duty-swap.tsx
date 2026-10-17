@@ -32,10 +32,15 @@ const STATUS_STYLE: Record<string, { color: string; label: string }> = {
   rejected: { color: "bg-red-600/20 text-red-400 border-red-600/30", label: "Admin Rejected" },
 };
 
-function SwapCard({ req, onAdminAction, onRespond, isAdmin }: any) {
+function SwapCard({ req, onAdminAction, onRespond, isAdmin, currentUserId, currentUserName }: any) {
   const [adminRemarks, setAdminRemarks] = useState("");
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const style = STATUS_STYLE[req.status] ?? STATUS_STYLE.pending;
+
+  const isTargetFaculty =
+    isAdmin ||
+    (currentUserId && req.target_id && String(currentUserId).toLowerCase() === String(req.target_id).toLowerCase()) ||
+    (currentUserName && req.target_name && String(currentUserName).toLowerCase().trim() === String(req.target_name).toLowerCase().trim());
 
   return (
     <div className="glass glass-hover rounded-2xl p-5 space-y-4">
@@ -78,14 +83,20 @@ function SwapCard({ req, onAdminAction, onRespond, isAdmin }: any) {
           <p className="text-xs font-bold text-amber-300">
             Permission required from target faculty ({req.target_name}):
           </p>
-          <div className="flex gap-2">
-            <Button size="sm" className="flex-1 btn-3d" onClick={() => onRespond(req.id, "accept")}>
-              <CheckCircle className="size-4 mr-1" /> Grant Permission (Accept)
-            </Button>
-            <Button size="sm" variant="destructive" className="flex-1" onClick={() => onRespond(req.id, "reject")}>
-              <XCircle className="size-4 mr-1" /> Decline Request
-            </Button>
-          </div>
+          {isTargetFaculty ? (
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1 btn-3d gap-1.5" onClick={() => onRespond(req.id, "accept")}>
+                <CheckCircle className="size-4" /> Grant Permission (Accept)
+              </Button>
+              <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={() => onRespond(req.id, "reject")}>
+                <XCircle className="size-4" /> Decline Request
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground italic">
+              Awaiting consent response from {req.target_name}. Only the target faculty or Exam Cell Admin can approve.
+            </p>
+          )}
         </div>
       )}
 
@@ -93,8 +104,8 @@ function SwapCard({ req, onAdminAction, onRespond, isAdmin }: any) {
       {isAdmin && (req.status === "target_accepted" || req.status === "pending") && (
         <div className="space-y-2 pt-2 border-t border-foreground/10">
           {!showAdminPanel ? (
-            <Button size="sm" variant="outline" onClick={() => setShowAdminPanel(true)}>
-              <Shield className="size-4 mr-1" /> Admin Final Review
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAdminPanel(true)}>
+              <Shield className="size-4" /> Admin Final Review
             </Button>
           ) : (
             <div className="space-y-2">
@@ -104,11 +115,11 @@ function SwapCard({ req, onAdminAction, onRespond, isAdmin }: any) {
                 onChange={(e) => setAdminRemarks(e.target.value)}
               />
               <div className="flex gap-2">
-                <Button size="sm" className="flex-1" onClick={() => { onAdminAction(req.id, "approve", adminRemarks); setShowAdminPanel(false); }}>
-                  <CheckCircle className="size-4 mr-1" /> Approve & Reassign Room
+                <Button size="sm" className="flex-1 gap-1.5" onClick={() => { onAdminAction(req.id, "approve", adminRemarks); setShowAdminPanel(false); }}>
+                  <CheckCircle className="size-4" /> Approve & Reassign Room
                 </Button>
-                <Button size="sm" variant="destructive" className="flex-1" onClick={() => { onAdminAction(req.id, "reject", adminRemarks); setShowAdminPanel(false); }}>
-                  <XCircle className="size-4 mr-1" /> Reject
+                <Button size="sm" variant="destructive" className="flex-1 gap-1.5" onClick={() => { onAdminAction(req.id, "reject", adminRemarks); setShowAdminPanel(false); }}>
+                  <XCircle className="size-4" /> Reject
                 </Button>
               </div>
             </div>
@@ -136,11 +147,18 @@ function DutySwapPage() {
   const [openNew, setOpenNew] = useState(false);
   const [newForm, setNewForm] = useState({ duty_id: "", requester_id: "fac-1", target_id: "", reason: "", remarks: "" });
 
+  const openSwapModal = () => {
+    const myId = me?.profile?.id || me?.employee_id || "fac-1";
+    setNewForm({ duty_id: "", requester_id: myId, target_id: "", reason: "", remarks: "" });
+    setOpenNew(true);
+  };
+
   const createMut = useMutation({
     mutationFn: () => createFn({ data: newForm } as any),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["swap-requests"] });
       setOpenNew(false);
+      setNewForm({ duty_id: "", requester_id: "fac-1", target_id: "", reason: "", remarks: "" });
       toast.success("Duty swap request sent to faculty member");
     },
   });
@@ -167,7 +185,7 @@ function DutySwapPage() {
       title="Alter / Swap Duty Request"
       description="Select target faculty from all teachers, request permission, and obtain admin room reassignment"
       actions={
-        <Button size="sm" className="btn-3d" onClick={() => setOpenNew(true)}>
+        <Button size="sm" className="btn-3d gap-1.5" onClick={openSwapModal}>
           <Plus className="size-4" /> Request Duty Swap
         </Button>
       }
@@ -181,6 +199,8 @@ function DutySwapPage() {
               key={req.id}
               req={req}
               isAdmin={isAdmin}
+              currentUserId={me?.profile?.id || me?.employee_id || me?.id}
+              currentUserName={me?.full_name || me?.profile?.full_name}
               onRespond={(id: string, response: string) => respondMut.mutate({ requestId: id, response })}
               onAdminAction={(id: string, action: string, remarks: string) => adminMut.mutate({ requestId: id, action, remarks })}
             />

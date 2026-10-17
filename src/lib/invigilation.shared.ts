@@ -96,7 +96,7 @@ export const examIdSchema = z.object({ examId: z.string().min(1) });
 
 export const emergencyRaiseSchema = z.object({
   allocationId: z.string().min(1),
-  reason: z.string().trim().min(3).max(300),
+  reason: z.string().trim().min(3).max(1000),
 });
 
 export const emergencyResolveSchema = z.object({
@@ -184,3 +184,35 @@ export const updateStudentSchema = z.object({
 export const deleteStudentSchema = z.object({
   studentId: z.string().min(1),
 });
+
+export const createRoomSchema = z.object({
+  room_number: z.string().trim().min(1).max(30),
+  floor: z.number().int().min(1).max(20),
+  block: z.string().trim().min(1).max(30).default("Block A"),
+  capacity: z.number().int().min(1).max(300).default(30),
+  active: z.boolean().default(true),
+});
+
+export const updateRoomSchema = z.object({
+  id: z.string().min(1),
+  room_number: z.string().trim().min(1).max(30),
+  floor: z.number().int().min(1).max(20),
+  block: z.string().trim().min(1).max(30),
+  capacity: z.number().int().min(1).max(300),
+  active: z.boolean().default(true),
+});
+
+export const deleteRoomSchema = z.object({
+  roomId: z.string().min(1),
+});
+
+export const updateExamSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(2).max(120),
+  exam_type: z.enum(["internal", "semester"]),
+  exam_date: z.string().min(8),
+  start_time: z.string().min(4),
+  department: z.string().trim().min(1).max(80).default("General"),
+  students_per_room: z.number().int().min(1).max(200).default(30),
+});
+

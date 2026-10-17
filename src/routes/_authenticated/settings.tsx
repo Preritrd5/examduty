@@ -82,7 +82,11 @@ function SettingsPage() {
             />
           </div>
         ))}
-        <Button onClick={() => save.mutate()} disabled={save.isPending || !isAdmin}>
+        <Button
+          onClick={() => save.mutate()}
+          disabled={save.isPending || !isAdmin}
+          className={isAdmin ? "btn-3d font-bold shadow-md" : ""}
+        >
           {isAdmin ? "Save rules" : "View only — admins edit rules"}
         </Button>
       </div>

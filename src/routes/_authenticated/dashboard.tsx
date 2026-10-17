@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Clock, Building2, GraduationCap, Users, CheckCircle2, UserCheck, UserX, AlertTriangle, CalendarIcon } from "lucide-react";
+import { Clock, Building2, GraduationCap, Users, CheckCircle2, UserCheck, UserX, AlertTriangle, CalendarIcon, CalendarRange, ArrowRight } from "lucide-react";
 
 import { AppShell, useMe } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDashboard, myDuties, listStudents } from "@/lib/invigilation.functions";
+import { getAcademicCalendarOverview } from "@/lib/academic-calendar.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -205,15 +206,23 @@ function DashboardPage() {
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fn(), refetchInterval: 10000 });
   const { data: me } = useMe();
   const dutiesFn = useServerFn(myDuties);
-  const { data: duties } = useQuery({ queryKey: ["my-duties"], queryFn: () => me?.profile?.id ? dutiesFn({ data: { teacherId: me.profile.id } }) : [], enabled: !!me?.profile?.id, refetchInterval: 10000 });
+  const { data: duties } = useQuery({ queryKey: ["my-duties", me?.profile?.id], queryFn: () => me?.profile?.id ? dutiesFn({ data: { teacherId: me.profile.id } }) : [], enabled: !!me?.profile?.id, refetchInterval: 10000 });
   const isAdmin = Boolean(me?.isAdmin);
 
-  const [students, setStudents] = useState<any[]>([]);
-  const [absentees, setAbsentees] = useState<Set<string>>(new Set());
+  const academicFn = useServerFn(getAcademicCalendarOverview);
+  const { data: academicOverview } = useQuery({
+    queryKey: ["academic-calendar-overview"],
+    queryFn: () => academicFn(),
+    refetchInterval: 20000,
+  });
 
-  useEffect(() => {
-    listStudents().then(res => setStudents(res || [])).catch(console.error);
-  }, []);
+  const studentsFn = useServerFn(listStudents);
+  const { data: studentsData } = useQuery({
+    queryKey: ["dashboard-students"],
+    queryFn: () => studentsFn(),
+  });
+  const students = studentsData || [];
+  const [absentees, setAbsentees] = useState<Set<string>>(new Set());
 
   const todaysDuty = (duties && duties.length > 0) ? duties[0] : null;
   const myStudents = students.sort((a, b) => (a.register_no || "").localeCompare(b.register_no || "")).slice(0, 30);
@@ -230,7 +239,7 @@ function DashboardPage() {
       title="Examination Control Centre"
       description="Today's duties, hall utilisation and faculty workload at a glance"
       actions={
-        <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 rounded-xl px-5">
+        <Button asChild className="btn-3d bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20 rounded-xl px-5 gap-1.5">
           <Link to="/exams">{isAdmin ? "Plan an examination" : "View examinations"}</Link>
         </Button>
       }
@@ -342,11 +351,11 @@ function DashboardPage() {
                               <td className="px-3 sm:px-4 py-2 sm:py-3 text-right">
                                 <Button 
                                   variant={isAbsent ? "destructive" : "outline"} 
-                                  size="sm"
-                                  className={"h-8 px-2 sm:px-3 text-xs " + (isAbsent ? "" : "text-muted-foreground")}
+                                  size="xs"
+                                  className={isAbsent ? "btn-3d" : "text-muted-foreground"}
                                   onClick={() => toggleAbsentee(s.id)}
                                 >
-                                  {isAbsent ? <><UserX className="size-3 mr-1"/> Absent</> : <><UserCheck className="size-3 mr-1"/> Present</>}
+                                  {isAbsent ? <><UserX className="size-3"/> Absent</> : <><UserCheck className="size-3"/> Present</>}
                                 </Button>
                               </td>
                             </tr>
@@ -381,13 +390,60 @@ function DashboardPage() {
             </section>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             <Stat label="Today's exams" value={data.cards.todaysExams} hint={`${data.cards.upcomingExams} upcoming`} />
             <Stat label="Halls in use today" value={data.cards.roomsInUseToday} hint={`${data.cards.totalRooms} halls total`} />
             <Stat label="Assigned today" value={data.cards.assignedToday} hint={`${data.cards.standbyToday} standby reserved`} />
             <Stat label="Pending acceptance" value={data.cards.pendingAcceptance} hint={`${data.cards.acceptedDuties} accepted`} />
             <Stat label="Faculty on roll" value={data.cards.teachers} hint={`${data.cards.declinedDuties} declined duties`} />
           </div>
+
+          {/* Academic Milestones & Important Dates Widget */}
+          {academicOverview && (
+            <div className="glass rounded-2xl p-5 border border-primary/25 bg-gradient-to-r from-primary/5 via-card to-card">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border/60">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                      {academicOverview.config.academic_year} · {academicOverview.config.semester_name}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {academicOverview.metrics.daysRemaining} days remaining in semester ({academicOverview.metrics.semesterProgressPercent}% elapsed)
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold flex items-center gap-2">
+                    <CalendarRange className="w-4 h-4 text-primary" /> Important Semester Dates & Examination Milestones
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/academic-calendar">
+                      Open Full Timeline <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                {academicOverview.nextMilestones.slice(0, 4).map((m: any) => (
+                  <div
+                    key={m.id}
+                    className="p-3 rounded-xl border border-border/70 bg-background/60 space-y-1.5 hover:border-primary/40 transition-colors"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-muted-foreground">Sl. {m.sl_no}</span>
+                      <Badge variant="outline" className="text-[10px]">{m.responsible_team}</Badge>
+                    </div>
+                    <div className="font-semibold text-xs text-foreground truncate">{m.name}</div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-primary shrink-0" />
+                      <span>{m.timeline_display}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="glass rounded-2xl p-5 lg:col-span-2">

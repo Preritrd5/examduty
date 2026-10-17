@@ -163,7 +163,7 @@ function BFormPage() {
               </Select>
             </div>
             {formData && (
-              <Button className="w-full btn-3d" onClick={handlePrint}>
+              <Button className="w-full btn-3d gap-1.5" onClick={handlePrint}>
                 <Printer className="size-4" /> Print B-Form
               </Button>
             )}
@@ -177,7 +177,7 @@ function BFormPage() {
             <div className="glass rounded-2xl overflow-hidden">
               <div className="border-b border-foreground/10 px-5 py-3 flex items-center justify-between">
                 <h2 className="font-semibold text-sm">Preview B-Form — Room {formData.room_no}</h2>
-                <Button size="sm" variant="outline" onClick={handlePrint}><Printer className="size-4" />Print</Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={handlePrint}><Printer className="size-4" />Print</Button>
               </div>
               <div className="w-full overflow-x-auto p-4 bg-white rounded-b-2xl scrollbar-thin">
                 <div className="min-w-[794px]">

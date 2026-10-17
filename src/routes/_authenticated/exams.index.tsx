@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Calendar, Trash2, ExternalLink, PlusCircle } from "lucide-react";
+import { Calendar, Trash2, ExternalLink, PlusCircle, Edit2 } from "lucide-react";
 
 import { AppShell, useMe } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createExam, deleteExam, listExams, listRooms, publishAllocation } from "@/lib/invigilation.functions";
+import { createExam, updateExam, deleteExam, listExams, listRooms, publishAllocation } from "@/lib/invigilation.functions";
 
 export const Route = createFileRoute("/_authenticated/exams/")({
   head: () => ({
@@ -54,6 +54,7 @@ function ExamsPage() {
   const listFn = useServerFn(listExams);
   const roomsFn = useServerFn(listRooms);
   const createFn = useServerFn(createExam);
+  const updateFn = useServerFn(updateExam);
   const deleteFn = useServerFn(deleteExam);
   const publishFn = useServerFn(publishAllocation);
 
@@ -61,6 +62,8 @@ function ExamsPage() {
   const rooms = useQuery({ queryKey: ["rooms"], queryFn: () => roomsFn() });
 
   const [open, setOpen] = useState(false);
+  const [editExamOpen, setEditExamOpen] = useState(false);
+  const [editingExam, setEditingExam] = useState<any | null>(null);
   const [name, setName] = useState("");
   const [examType, setExamType] = useState<"internal" | "semester">("internal");
   const [examDate, setExamDate] = useState("");
@@ -126,10 +129,38 @@ function ExamsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const updateExamMut = useMutation({
+    mutationFn: (examData: any) => updateFn({ data: examData }),
+    onSuccess: () => {
+      toast.success("Examination updated successfully");
+      setEditExamOpen(false);
+      setEditingExam(null);
+      qc.invalidateQueries({ queryKey: ["exams"] });
+    },
+    onError: (e: any) => toast.error("Failed to update examination: " + e.message),
+  });
+
+  const handleEditExamClick = (exam: any) => {
+    setEditingExam({
+      id: exam.id,
+      name: exam.name,
+      exam_type: exam.exam_type || "internal",
+      exam_date: exam.exam_date,
+      start_time: exam.start_time || "10:00 AM",
+      department: exam.department || "General",
+      students_per_room: exam.students_per_room || 30,
+    });
+    setEditExamOpen(true);
+  };
+
   return (
     <AppShell
       title="Examinations"
-      description="Internal sessions run 90 minutes, semester sessions run 180 minutes · All admin options unlocked"
+      description={
+        isAdmin
+          ? "Internal sessions run 90 minutes, semester sessions run 180 minutes · All admin options unlocked"
+          : "Internal sessions run 90 minutes, semester sessions run 180 minutes · View scheduled examinations and hall allocations"
+      }
       actions={
         !isAdmin ? (
           <Badge variant="secondary">View only · admin schedules exams</Badge>
@@ -296,26 +327,34 @@ function ExamsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     {isAdmin ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <Button size="sm" variant="default" asChild>
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        <Button size="xs" variant="default" asChild className="btn-3d gap-1.5">
                           <Link to="/exams/$examId" params={{ examId: e.id }}>
-                            <ExternalLink className="mr-1 size-3.5" /> Manage & Allocate
+                            <ExternalLink className="size-3.5" /> Manage & Allocate
                           </Link>
                         </Button>
                         <Button
-                          size="sm"
+                          size="xs"
                           variant="outline"
                           onClick={() => toggleStatus.mutate(e.id)}
                           disabled={toggleStatus.isPending}
                         >
                           {e.status === "published" ? "Set Draft" : "Publish"}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => remove.mutate(e.id)}>
-                          <Trash2 className="size-4 text-destructive" />
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          title="Edit Exam Schedule"
+                          onClick={() => handleEditExamClick(e)}
+                        >
+                          <Edit2 className="size-3.5 text-muted-foreground hover:text-foreground" />
+                        </Button>
+                        <Button size="icon-xs" variant="ghost" onClick={() => remove.mutate(e.id)}>
+                          <Trash2 className="size-3.5 text-destructive" />
                         </Button>
                       </div>
                     ) : (
-                      <Button size="sm" variant="outline" asChild>
+                      <Button size="xs" variant="outline" asChild>
                         <Link to="/exams/$examId" params={{ examId: e.id }}>
                           View
                         </Link>
@@ -328,6 +367,100 @@ function ExamsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Admin Edit Exam Dialog */}
+      <Dialog open={editExamOpen} onOpenChange={(v) => !v && setEditExamOpen(false)}>
+        <DialogContent className="glass-strong max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="size-5 text-primary" />
+              Edit Examination
+            </DialogTitle>
+          </DialogHeader>
+          {editingExam && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-exam-name">Exam Title *</Label>
+                <Input
+                  id="edit-exam-name"
+                  value={editingExam.name}
+                  onChange={(e) => setEditingExam({ ...editingExam, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-exam-type">Type</Label>
+                  <Select
+                    value={editingExam.exam_type}
+                    onValueChange={(v) => setEditingExam({ ...editingExam, exam_type: v })}
+                  >
+                    <SelectTrigger id="edit-exam-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Internal (90m)</SelectItem>
+                      <SelectItem value="semester">Semester (180m)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-exam-dept">Department</Label>
+                  <Input
+                    id="edit-exam-dept"
+                    value={editingExam.department}
+                    onChange={(e) => setEditingExam({ ...editingExam, department: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-exam-date">Date *</Label>
+                  <Input
+                    id="edit-exam-date"
+                    type="date"
+                    value={editingExam.exam_date}
+                    onChange={(e) => setEditingExam({ ...editingExam, exam_date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-exam-time">Start Time *</Label>
+                  <Input
+                    id="edit-exam-time"
+                    value={editingExam.start_time}
+                    onChange={(e) => setEditingExam({ ...editingExam, start_time: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-exam-cap">Students per Room</Label>
+                <Input
+                  id="edit-exam-cap"
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={editingExam.students_per_room}
+                  onChange={(e) => setEditingExam({ ...editingExam, students_per_room: parseInt(e.target.value) || 30 })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="pt-3">
+            <Button variant="outline" onClick={() => setEditExamOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="btn-3d"
+              disabled={updateExamMut.isPending || !editingExam?.name?.trim() || !editingExam?.exam_date}
+              onClick={() => updateExamMut.mutate(editingExam)}
+            >
+              {updateExamMut.isPending ? "Saving…" : "Save Exam"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

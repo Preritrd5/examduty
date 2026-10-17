@@ -27,6 +27,10 @@ import {
   createStudentSchema,
   updateStudentSchema,
   deleteStudentSchema,
+  createRoomSchema,
+  updateRoomSchema,
+  deleteRoomSchema,
+  updateExamSchema,
 } from "./invigilation.shared";
 
 const STAFF_DIRECTORY_COLUMNS =
@@ -75,12 +79,12 @@ const lastNamesList = [
 const depts = ["Computer Science", "Electrical", "Mechanical", "Civil", "Electronics", "Information Technology"];
 const sections = ["A", "B", "C", "D", "E"];
 
-// 5 Teachers / Staff (For specific admin mock requirement)
-const MOCK_TEACHERS = Array.from({ length: 5 }, (_, i) => {
+// 50 Teachers & Checking Staff
+const MOCK_TEACHERS = Array.from({ length: 50 }, (_, i) => {
   const fn = firstNamesList[i % firstNamesList.length];
   const ln = lastNamesList[(i * 3 + Math.floor(i / firstNamesList.length)) % lastNamesList.length];
-  const fullName = `${i % 2 === 1 ? "Mr." : "Dr."} ${fn} ${ln}`;
   const isNonTeaching = i % 2 === 1;
+  const fullName = `${isNonTeaching ? "Mr./Ms." : "Dr."} ${fn} ${ln}`;
   const desigsTeaching = ["Professor", "Associate Professor", "Assistant Professor"];
   const desigsNonTeaching = ["Lab Superintendent", "System Administrator", "Hall Inspector", "Exam Invigilator", "Technical Assistant"];
   const designation = isNonTeaching
@@ -563,37 +567,50 @@ export const getExam = createServerFn({ method: "POST" })
       cursor += seats.length;
 
       // Primary duties from allocations, fall back to deterministic mock
+      const teachingStaff = teachers.filter((t) => (t.staff_type ?? "teaching") === "teaching" && t.active);
+      const checkingStaff = teachers.filter((t) => t.staff_type === "non_teaching" && t.active);
+      const primaryTeacher = (teachingStaff.length > 0 ? teachingStaff : teachers)[rIdx % (teachingStaff.length || teachers.length)];
+      const fallbackSecondaryPool = teachers.filter((t) => t.id !== primaryTeacher.id);
+      const secondaryTeacher = (checkingStaff.length > 0 ? checkingStaff : fallbackSecondaryPool)[rIdx % ((checkingStaff.length > 0 ? checkingStaff.length : fallbackSecondaryPool.length) || 1)] || fallbackSecondaryPool[0];
+
       const hallAllocs = examAllocs.filter((a) => a.room_id === r.id);
       let hallDuties;
       if (hallAllocs.length > 0) {
-        hallDuties = hallAllocs.map((a) => {
-          const t = teachers.find((x) => x.id === a.teacher_id) || teachers[rIdx % teachers.length];
+        hallDuties = hallAllocs.map((a, aIdx) => {
+          let t = teachers.find((x) => x.id === a.teacher_id);
+          if (!t) {
+            t = a.duty_role === "primary" ? primaryTeacher : secondaryTeacher;
+          }
           return {
             id: a.id,
-            teacher_id: a.teacher_id,
+            teacher_id: t.id,
             duty_role: a.duty_role,
             status: a.status,
             cross_dept_fallback: a.cross_dept_fallback ?? false,
             teacher: t,
           };
         });
+        if (hallDuties.length >= 2 && hallDuties[0].teacher_id === hallDuties[1].teacher_id) {
+          hallDuties[1].teacher = secondaryTeacher;
+          hallDuties[1].teacher_id = secondaryTeacher.id;
+        }
       } else {
         hallDuties = [
           {
             id: `alloc-${rIdx}-1`,
-            teacher_id: teachers[rIdx % teachers.length].id,
+            teacher_id: primaryTeacher.id,
             duty_role: "primary",
             status: "accepted",
             cross_dept_fallback: false,
-            teacher: teachers[rIdx % teachers.length],
+            teacher: primaryTeacher,
           },
           {
             id: `alloc-${rIdx}-2`,
-            teacher_id: teachers[(rIdx + 25) % teachers.length].id,
+            teacher_id: secondaryTeacher.id,
             duty_role: "secondary",
             status: "accepted",
             cross_dept_fallback: false,
-            teacher: teachers[(rIdx + 25) % teachers.length],
+            teacher: secondaryTeacher,
           },
         ];
       }
@@ -734,14 +751,37 @@ export const publishAllocation = createServerFn({ method: "POST" })
 export const reassignDuty = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => reassignSchema.parse(input))
-  .handler(async () => {
+  .handler(async ({ data }) => {
+    const alloc = stateAllocations.find((a) => a.id === data.allocationId);
+    if (alloc) {
+      alloc.teacher_id = data.teacherId;
+    } else {
+      stateAllocations.push({
+        id: data.allocationId,
+        teacher_id: data.teacherId,
+        duty_role: data.allocationId.endsWith("-2") ? "secondary" : "primary",
+        status: "accepted",
+      });
+    }
+
+    const duty = stateDuties.find((d) => d.id === data.allocationId || d.allocation_id === data.allocationId);
+    if (duty) {
+      const newTeacher = stateTeachers.find((t) => t.id === data.teacherId);
+      duty.teacher_id = data.teacherId;
+      if (newTeacher) {
+        duty.teacher_name = newTeacher.full_name;
+        duty.department = newTeacher.department;
+      }
+    }
     return { ok: true };
   });
 
 export const removeDuty = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => allocationIdSchema.parse(input))
-  .handler(async () => {
+  .handler(async ({ data }) => {
+    stateAllocations = stateAllocations.filter((a) => a.id !== data.allocationId);
+    stateDuties = stateDuties.filter((d) => d.id !== data.allocationId && d.allocation_id !== data.allocationId);
     return { ok: true };
   });
 
@@ -750,6 +790,8 @@ export const deleteExam = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => examIdSchema.parse(input))
   .handler(async ({ data }) => {
     stateExams = stateExams.filter((e) => e.id !== data.examId);
+    stateAllocations = stateAllocations.filter((a) => a.exam_id !== data.examId);
+    stateDuties = stateDuties.filter((d) => d.exam_id !== data.examId);
     return { ok: true };
   });
 
@@ -768,49 +810,55 @@ export const updateSettings = createServerFn({ method: "POST" })
   });
 
 export const upsertTeacher = createServerFn({ method: "POST" })
-  .validator((input: unknown) => teacherSchema.partial().parse(input))
+  .middleware([requireSupabaseAuth])
   .handler(async ({ data }) => {
-    if (data.id) {
-      const idx = stateTeachers.findIndex(t => t.id === data.id || t.employee_id === data.id);
-      if (idx !== -1) {
-        stateTeachers[idx] = {
-          ...stateTeachers[idx],
-          ...(data.full_name ? { full_name: data.full_name } : {}),
-          ...(data.department ? { department: data.department } : {}),
-          ...(data.designation ? { designation: data.designation } : {}),
-          ...(data.email ? { email: data.email } : {}),
-          ...(data.block ? { block: data.block } : {}),
-          ...(data.phone !== undefined ? { phone: data.phone } : {}),
-          ...(data.office !== undefined ? { office: data.office } : {}),
-          ...(data.emergency_phone !== undefined ? { emergency_phone: data.emergency_phone } : {}),
-          ...(data.avatar_url !== undefined ? { avatar_url: data.avatar_url } : {}),
-          ...(data.banner_url !== undefined ? { banner_url: data.banner_url } : {}),
-        };
-        if (data.password && data.password.trim() !== "") {
-          stateTeachers[idx].password = data.password;
-        }
-        return { id: stateTeachers[idx].id, teacher: stateTeachers[idx] };
-      }
+    const tData = ((data as any)?.data ?? data) as any;
+    const existingIndex = stateTeachers.findIndex(
+      (t) => (tData.id && t.id === tData.id) || (tData.employee_id && t.employee_id === tData.employee_id)
+    );
+
+    if (existingIndex >= 0) {
+      stateTeachers[existingIndex] = {
+        ...stateTeachers[existingIndex],
+        ...tData,
+        full_name: tData.full_name || stateTeachers[existingIndex].full_name,
+        department: tData.department || stateTeachers[existingIndex].department,
+        designation: tData.designation || stateTeachers[existingIndex].designation,
+        block: tData.block || stateTeachers[existingIndex].block,
+        max_duties: tData.max_duties !== undefined ? Number(tData.max_duties) : stateTeachers[existingIndex].max_duties,
+        active: tData.active !== undefined ? Boolean(tData.active) : stateTeachers[existingIndex].active,
+        password: tData.password || stateTeachers[existingIndex].password,
+        phone: tData.phone ?? stateTeachers[existingIndex].phone,
+        office: tData.office ?? stateTeachers[existingIndex].office,
+        emergency_phone: tData.emergency_phone ?? stateTeachers[existingIndex].emergency_phone,
+        avatar_url: tData.avatar_url ?? stateTeachers[existingIndex].avatar_url,
+        banner_url: tData.banner_url ?? stateTeachers[existingIndex].banner_url,
+      };
+      return { id: stateTeachers[existingIndex].id, teacher: stateTeachers[existingIndex] };
+    } else {
+      const empId = tData.employee_id || `EMP${Math.floor(Math.random() * 9000 + 1000)}`;
+      const newTeacher = {
+        id: tData.id || empId,
+        employee_id: empId,
+        full_name: tData.full_name || "New Faculty Member",
+        department: tData.department || "Computer Science",
+        designation: tData.designation || "Assistant Professor",
+        staff_type: tData.staff_type || "teaching",
+        is_senior: Boolean(tData.is_senior),
+        max_duties: tData.max_duties ? Number(tData.max_duties) : 6,
+        block: tData.block || "A",
+        active: tData.active !== undefined ? Boolean(tData.active) : true,
+        email: tData.email || `${empId.toLowerCase()}@snpsu.edu.in`,
+        password: tData.password || "pass123",
+        phone: tData.phone || "+91 98765 43210",
+        office: tData.office || "Room 201",
+        emergency_phone: tData.emergency_phone || "+91 98765 00000",
+        duties: 0,
+        created_at: new Date().toISOString(),
+      };
+      stateTeachers.unshift(newTeacher);
+      return { id: newTeacher.id, teacher: newTeacher };
     }
-    
-    const teacher = {
-      id: `teacher-${Date.now()}`,
-      full_name: data.full_name,
-      department: data.department,
-      designation: data.designation,
-      staff_type: "teaching",
-      is_senior: data.is_senior,
-      max_duties: data.max_duties,
-      active: true,
-      email: data.email,
-      phone: "+91 98765 43210",
-      employee_id: `EMP${Math.floor(Math.random() * 9000 + 1000)}`,
-      password: data.password || "pass123",
-      duties: 0,
-      block: data.block || "A",
-    };
-    stateTeachers.unshift(teacher);
-    return { id: teacher.id };
   });
 
 export const importStaff = createServerFn({ method: "POST" })
@@ -899,9 +947,9 @@ export const importStudents = createServerFn({ method: "POST" })
         match.department = row.department;
         match.semester = row.semester;
         updated++;
-      } else {
-        const roomIndex = Math.floor(created / 30);
-        const seatIndex = created % 30;
+        const totalIdx = stateStudents.length;
+        const roomIndex = Math.floor(totalIdx / 30);
+        const seatIndex = totalIdx % 30;
         const generatedSeatNo = (seatIndex * 2) + 1; // 1, 3, 5, ..., 59
         
         stateStudents.push({
@@ -932,23 +980,28 @@ export const importStudents = createServerFn({ method: "POST" })
 
 export const myDuties = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ teacherId: z.string().min(1) }).parse(input))
-  .handler(async ({ data }) => {
-    const allocations = stateAllocations.filter(a => a.teacher_id === data.teacherId);
-    
+  .inputValidator((input: unknown) =>
+    z.object({ teacherId: z.string().optional() }).optional().parse(input || {})
+  )
+  .handler(async ({ data, context }) => {
+    const targetTeacherId = data?.teacherId || (context?.userId !== "demo-admin-id" ? context?.userId : undefined);
+    const allocations = targetTeacherId
+      ? stateAllocations.filter((a) => a.teacher_id === targetTeacherId)
+      : [];
+
     if (allocations.length > 0) {
-      return allocations.map(a => {
-        const exam = stateExams.find(e => e.id === a.exam_id);
-        const room = stateRooms.find(r => r.id === a.room_id);
+      return allocations.map((a) => {
+        const exam = stateExams.find((e) => e.id === a.exam_id);
+        const room = stateRooms.find((r) => r.id === a.room_id);
         return {
           allocation_id: a.id,
           duty_role: a.duty_role,
           status: a.status,
           exam_id: a.exam_id,
           exam_name: exam?.name || "Unknown Exam",
-          exam_date: exam?.exam_date || new Date().toISOString().split('T')[0],
+          exam_date: exam?.exam_date || new Date().toISOString().split("T")[0],
           start_time: exam?.start_time || "10:00 AM",
-          duration_minutes: exam?.exam_type === 'internal' ? 90 : 180,
+          duration_minutes: exam?.exam_type === "internal" ? 90 : 180,
           room_id: room?.id,
           hall: room ? `Block ${room.block} - ${room.room_number}` : "Unknown Room",
           floor: room?.floor || 1,
@@ -1275,3 +1328,62 @@ export const deleteStudent = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const createRoom = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => createRoomSchema.parse(input))
+  .handler(async ({ data }) => {
+    const newRoom = {
+      id: `room-${Date.now()}`,
+      room_number: data.room_number,
+      floor: data.floor,
+      block: data.block || "Block A",
+      capacity: data.capacity || 30,
+      active: data.active ?? true,
+      created_at: new Date().toISOString(),
+    };
+    stateRooms.push(newRoom);
+    return newRoom;
+  });
+
+export const updateRoom = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => updateRoomSchema.parse(input))
+  .handler(async ({ data }) => {
+    const room = stateRooms.find((r) => r.id === data.id);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+    room.room_number = data.room_number;
+    room.floor = data.floor;
+    room.block = data.block;
+    room.capacity = data.capacity;
+    room.active = data.active;
+    return room;
+  });
+
+export const deleteRoom = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => deleteRoomSchema.parse(input))
+  .handler(async ({ data }) => {
+    stateRooms = stateRooms.filter((r) => r.id !== data.roomId);
+    return { ok: true };
+  });
+
+export const updateExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => updateExamSchema.parse(input))
+  .handler(async ({ data }) => {
+    const exam = stateExams.find((e) => e.id === data.id);
+    if (!exam) {
+      throw new Error("Exam not found");
+    }
+    exam.name = data.name;
+    exam.exam_type = data.exam_type;
+    exam.exam_date = data.exam_date;
+    exam.start_time = data.start_time;
+    exam.department = data.department;
+    if (data.students_per_room) {
+      exam.students_per_room = data.students_per_room;
+    }
+    return exam;
+  });

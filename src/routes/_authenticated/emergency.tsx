@@ -147,11 +147,11 @@ function EmergencyPage() {
             </div>
 
             <Button
-              className="btn-3d w-full"
+              className="btn-3d w-full gap-1.5"
               disabled={raiseMut.isPending || !form.roomNumber || !form.message.trim()}
               onClick={() => raiseMut.mutate()}
             >
-              <Send className="size-4 mr-1.5" />
+              <Send className="size-4" />
               {raiseMut.isPending ? "Sending Complaint…" : "Send Emergency Alert to Admin Desk"}
             </Button>
           </div>
@@ -202,10 +202,10 @@ function EmergencyPage() {
                     {isAdmin && (
                       <Button
                         size="sm"
-                        className="btn-3d text-xs"
+                        className="btn-3d text-xs gap-1.5"
                         onClick={() => resolveMut.mutate({ requestId: item.id, action: "resolve" })}
                       >
-                        <ShieldCheck className="size-3.5 mr-1" /> Mark Solved & Resolved
+                        <ShieldCheck className="size-3.5" /> Mark Solved & Resolved
                       </Button>
                     )}
                   </div>

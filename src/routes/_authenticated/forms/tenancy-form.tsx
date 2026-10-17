@@ -74,7 +74,7 @@ function TenancyFormPage() {
       title="Tenancy Form — August 2026"
       description="Faculty Room Invigilation & Frisking Duty Allotment Directory"
       actions={
-        <Button size="sm" onClick={handlePrint} variant="outline">
+        <Button size="sm" onClick={handlePrint} variant="outline" className="gap-1.5">
           <Printer className="size-4" /> Print Tenancy Form
         </Button>
       }
@@ -92,7 +92,7 @@ function TenancyFormPage() {
                   Timings: 1.30PM-4.30PM | Reporting: 12.55PM-1.45PM
                 </p>
               </div>
-              <Button size="sm" className="btn-3d" onClick={handlePrint}>
+              <Button size="sm" className="btn-3d gap-1.5" onClick={handlePrint}>
                 <Printer className="size-4" /> Print Sheet
               </Button>
             </div>

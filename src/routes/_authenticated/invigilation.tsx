@@ -98,12 +98,12 @@ function InvigilationPage() {
       title="Invigilation Duties & Schedule"
       description={isAdmin ? "Allot different rooms & change daily faculty duties" : "View your allotted daily examination duties and schedule"}
       actions={
-        <div className="flex gap-2">
-          <Button asChild variant="outline" size="sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
             <Link to="/duty-swap"><ArrowLeftRight className="size-4" />Alter / Swap Duty</Link>
           </Button>
           {isAdmin && (
-            <Button size="sm" className="btn-3d" onClick={() => setOpenAssign(true)}>
+            <Button size="sm" className="btn-3d gap-1.5" onClick={() => setOpenAssign(true)}>
               <Plus className="size-4" />Assign Duty
             </Button>
           )}
@@ -193,19 +193,20 @@ function InvigilationPage() {
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
-                        <div className="flex gap-1">
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon-xs"
+                            title="Edit Allotment"
                             onClick={() => {
                               setEditingDuty(d);
                               setEditFormState({ room_number: d.room_number, teacher_id: d.teacher_id, duty_role: d.duty_role });
                             }}
                           >
-                            <Edit className="size-4" />
+                            <Edit className="size-3.5" />
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteMut.mutate(d.id)}>
-                            <Trash2 className="size-4" />
+                          <Button variant="ghost" size="icon-xs" className="text-destructive hover:bg-destructive/10" title="Remove Duty" onClick={() => deleteMut.mutate(d.id)}>
+                            <Trash2 className="size-3.5" />
                           </Button>
                         </div>
                       </td>

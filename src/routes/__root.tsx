@@ -14,6 +14,15 @@ import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = decodeURIComponent(window.location.pathname).toLowerCase().trim();
+      if ((p.includes("timetable") || p.includes("allocation")) && p !== "/timetable-allocation") {
+        window.location.replace("/timetable-allocation");
+      }
+    }
+  }, []);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -22,10 +31,16 @@ function NotFoundComponent() {
         <p className="mt-2 text-sm text-muted-foreground">
           The page you're looking for doesn't exist or has been moved.
         </p>
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Link
+            to="/timetable-allocation"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Timetable & Allocation
+          </Link>
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
           </Link>
@@ -39,6 +54,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = decodeURIComponent(window.location.pathname).toLowerCase().trim();
+      if ((p.includes("timetable") || p.includes("allocation")) && p !== "/timetable-allocation") {
+        window.location.replace("/timetable-allocation");
+      }
+    }
+  }, []);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -46,15 +70,21 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Something went wrong on our end. You can try refreshing, navigate to Timetable & Allocation, or head back home.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <a
+            href="/timetable-allocation"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Timetable & Allocation
+          </a>
           <button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Try again
           </button>
@@ -133,7 +163,12 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    // Demo mode: skip supabase auth state listener
+    if (typeof window !== "undefined") {
+      const p = decodeURIComponent(window.location.pathname).toLowerCase().trim();
+      if ((p.includes("timetable") || p.includes("allocation")) && p !== "/timetable-allocation") {
+        window.location.replace("/timetable-allocation");
+      }
+    }
   }, [router, queryClient]);
 
   return (

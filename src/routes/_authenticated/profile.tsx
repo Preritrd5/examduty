@@ -93,6 +93,7 @@ function ProfilePage() {
             if (variables.banner_url !== undefined) updatedMock.banner_url = variables.banner_url;
             if (variables.password !== undefined) updatedMock.password = variables.password;
             localStorage.setItem("mock_user", JSON.stringify(updatedMock));
+            window.dispatchEvent(new Event("local-auth-change"));
             setMockUser(updatedMock);
           } catch (e) {
             console.error("Failed to sync mock_user in localStorage", e);
@@ -393,8 +394,8 @@ function ProfilePage() {
           </div>
 
           <div className="mt-8 pt-6 border-t border-border/40 flex justify-end">
-            <Button onClick={handleSaveContact} disabled={updateMutation.isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 shadow-lg shadow-primary/20 rounded-xl">
-              <Save className="size-4 mr-2" /> Save Changes
+            <Button onClick={handleSaveContact} disabled={updateMutation.isPending} className="btn-3d bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 shadow-lg shadow-primary/20 rounded-xl gap-2">
+              <Save className="size-4" /> Save Changes
             </Button>
           </div>
         </CardContent>
@@ -463,8 +464,8 @@ function ProfilePage() {
             <Button variant="outline" onClick={handleClearPassword} className="font-bold text-rose-500 border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-600 rounded-xl px-6">
               Clear
             </Button>
-            <Button onClick={handleUpdatePassword} disabled={updateMutation.isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 shadow-lg shadow-primary/20 rounded-xl">
-              <KeyRound className="size-4 mr-2" /> Update Password
+            <Button onClick={handleUpdatePassword} disabled={updateMutation.isPending} className="btn-3d bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 shadow-lg shadow-primary/20 rounded-xl gap-2">
+              <KeyRound className="size-4" /> Update Password
             </Button>
           </div>
         </CardContent>

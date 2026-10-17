@@ -241,6 +241,20 @@ function AFormPage() {
     w.print();
   }
 
+  if (!isAdmin) {
+    return (
+      <AppShell title="A Form — Access Restricted">
+        <div className="glass rounded-2xl p-12 text-center flex flex-col items-center gap-3">
+          <ShieldAlert className="size-12 text-destructive" />
+          <h2 className="text-lg font-semibold">Admin Access Required</h2>
+          <p className="text-sm text-muted-foreground max-w-md">
+            A-Form (Floor-wise Invigilator & Booklet Control) is managed strictly by the Examination Cell Admin. Faculty members can view their allotted room duties from the main Invigilation menu.
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell title="A-Form — Invigilators / Faculty (Floor-wise)" description="Official Floor-wise Invigilator & Booklet Control Form (Pre-filled Floor, Room & Faculty)">
       <div className="grid gap-6 lg:grid-cols-3">
@@ -261,12 +275,12 @@ function AFormPage() {
               </Select>
             </div>
             {isAdmin && (
-              <Button className="w-full btn-3d animate-fade-in" onClick={() => setOpenAdd(true)}>
-                <Plus className="size-4 mr-1" /> Add Faculty Entry
+              <Button className="w-full btn-3d animate-fade-in gap-1.5" onClick={() => setOpenAdd(true)}>
+                <Plus className="size-4" /> Add Faculty Entry
               </Button>
             )}
             {formData && (
-              <Button className="w-full" variant="outline" onClick={handlePrint}>
+              <Button className="w-full gap-1.5" variant="outline" onClick={handlePrint}>
                 <Printer className="size-4" /> Print A-Form
               </Button>
             )}
@@ -280,7 +294,7 @@ function AFormPage() {
             <div className="glass rounded-2xl overflow-hidden">
               <div className="border-b border-foreground/10 px-5 py-3 flex items-center justify-between bg-foreground/[0.02]">
                 <h2 className="font-semibold text-sm">Preview A-Form ({formData.subtitle})</h2>
-                <Button size="sm" variant="outline" onClick={handlePrint}><Printer className="size-4" />Print</Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={handlePrint}><Printer className="size-4" />Print</Button>
               </div>
               
               {/* Horizontal Scroll Support for Mobile Screens */}

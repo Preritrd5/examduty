@@ -1,16 +1,26 @@
+// @ts-nocheck
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { Printer } from "lucide-react";
+import { Printer, Plus, Edit2, Trash2, GraduationCap } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell, useMe } from "@/components/AppShell";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { listStudents } from "@/lib/invigilation.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { listStudents, createStudent, updateStudent, deleteStudent } from "@/lib/invigilation.functions";
 import { StudentImportDialog } from "@/components/StudentImportDialog";
 
 export const Route = createFileRoute("/_authenticated/students")({
@@ -29,15 +39,84 @@ export const Route = createFileRoute("/_authenticated/students")({
 const PAGE = 60;
 
 function StudentsPage() {
+  const qc = useQueryClient();
   const fn = useServerFn(listStudents);
+  const createFn = useServerFn(createStudent);
+  const updateFn = useServerFn(updateStudent);
+  const deleteFn = useServerFn(deleteStudent);
+
   const { data: me } = useMe();
   const isAdmin = Boolean(me?.isAdmin);
   const { data, isLoading } = useQuery({ queryKey: ["students"], queryFn: () => fn() });
+
   const [q, setQ] = useState("");
   const [selectedSection, setSelectedSection] = useState<string>("ALL");
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<"serial" | "name" | "section">("name");
+
+  // Add Student State
+  const [addOpen, setAddOpen] = useState(false);
+  const [newStudent, setNewStudent] = useState({
+    register_no: "",
+    full_name: "",
+    department: "Computer Science",
+    section: "A",
+    semester: 4,
+  });
+
+  // Edit Student State
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: (studentData: any) => createFn({ data: studentData }),
+    onSuccess: () => {
+      toast.success("Student added successfully to seating roster");
+      setAddOpen(false);
+      setNewStudent({ register_no: "", full_name: "", department: "Computer Science", section: "A", semester: 4 });
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (e: any) => toast.error("Failed to add student: " + e.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (studentData: any) => updateFn({ data: studentData }),
+    onSuccess: () => {
+      toast.success("Student record updated successfully");
+      setEditOpen(false);
+      setEditingStudent(null);
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (e: any) => toast.error("Failed to update student: " + e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (studentId: string) => deleteFn({ data: { studentId } }),
+    onSuccess: () => {
+      toast.success("Student removed from examination roster");
+      qc.invalidateQueries({ queryKey: ["students"] });
+    },
+    onError: (e: any) => toast.error("Failed to delete student: " + e.message),
+  });
+
+  const handleEditClick = (student: any) => {
+    setEditingStudent({
+      id: student.id,
+      register_no: student.register_no,
+      full_name: student.full_name,
+      department: student.department || "Computer Science",
+      section: student.section || "A",
+      semester: student.semester || 4,
+    });
+    setEditOpen(true);
+  };
+
+  const handleDeleteClick = (student: any) => {
+    if (confirm(`Are you sure you want to remove student ${student.full_name} (${student.register_no})?`)) {
+      deleteMutation.mutate(student.id);
+    }
+  };
 
   const departments = useMemo(() => {
     const all = data ?? [];
@@ -54,7 +133,7 @@ function StudentsPage() {
         String(s.serial_no).includes(term) ||
         s.register_no.toLowerCase().includes(term) ||
         s.full_name.toLowerCase().includes(term) ||
-        s.hall.toLowerCase().includes(term) ||
+        (s.hall && s.hall.toLowerCase().includes(term)) ||
         (s.section && s.section.toLowerCase().includes(term));
 
       const matchesSection = selectedSection === "ALL" || s.section === selectedSection;
@@ -92,7 +171,7 @@ function StudentsPage() {
               setPage(0);
             }}
             placeholder="Search SRN, name, section or hall"
-            className="w-full sm:w-56"
+            className="w-full sm:w-56 no-print"
           />
           <Button
             variant="outline"
@@ -103,7 +182,23 @@ function StudentsPage() {
           >
             <Printer className="mr-1.5 size-4" /> Print Roster
           </Button>
-          {isAdmin ? <StudentImportDialog /> : null}
+
+          {isAdmin ? (
+            <div className="flex items-center gap-2 no-print">
+              <Button
+                size="sm"
+                className="btn-3d flex items-center gap-1"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="size-4" /> Add Student
+              </Button>
+              <StudentImportDialog />
+            </div>
+          ) : (
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs font-semibold no-print">
+              Faculty View · Read Only
+            </Badge>
+          )}
         </div>
       }
     >
@@ -118,7 +213,7 @@ function StudentsPage() {
         <p className="text-sm text-muted-foreground">Loading student seating roster…</p>
       ) : (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             {[
               ["Total Students", data?.length ?? 0],
               ["Total Block A Halls", 40],
@@ -154,23 +249,23 @@ function StudentsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold uppercase text-muted-foreground mr-1">Section:</span>
-              {["ALL", "A", "B", "C", "D", "E"].map((sec) => (
-                <Button
-                  key={sec}
-                  variant={selectedSection === sec ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setSelectedSection(sec);
-                    setPage(0);
-                  }}
-                  className="h-8 px-3 text-xs"
-                >
-                  {sec === "ALL" ? "All Sections" : `Sec ${sec}`}
-                </Button>
-              ))}
-            </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold uppercase text-muted-foreground mr-1">Section:</span>
+                {["ALL", "A", "B", "C", "D", "E"].map((sec) => (
+                  <Button
+                    key={sec}
+                    variant={selectedSection === sec ? "default" : "outline"}
+                    size="xs"
+                    onClick={() => {
+                      setSelectedSection(sec);
+                      setPage(0);
+                    }}
+                    className="h-8 px-3 text-xs"
+                  >
+                    {sec === "ALL" ? "All Sections" : `Sec ${sec}`}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center gap-1">
@@ -214,6 +309,7 @@ function StudentsPage() {
                   <TableHead>Hall</TableHead>
                   <TableHead>Floor</TableHead>
                   <TableHead>Seat No</TableHead>
+                  {isAdmin && <TableHead className="text-right no-print">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -233,6 +329,30 @@ function StudentsPage() {
                     </TableCell>
                     <TableCell>Floor {s.floor ?? 1}</TableCell>
                     <TableCell className="font-semibold">Seat {s.seat_no}</TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right no-print">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground hover:text-foreground"
+                            title="Edit Student"
+                            onClick={() => handleEditClick(s)}
+                          >
+                            <Edit2 className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-destructive hover:bg-destructive/10"
+                            title="Delete Student"
+                            onClick={() => handleDeleteClick(s)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -262,6 +382,179 @@ function StudentsPage() {
           </div>
         </div>
       )}
+
+      {/* Admin Add Student Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="glass-strong max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="size-5 text-primary" />
+              Add Student to Seating Pool
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="std-srn">Register Number / SRN *</Label>
+              <Input
+                id="std-srn"
+                value={newStudent.register_no}
+                onChange={(e) => setNewStudent({ ...newStudent, register_no: e.target.value })}
+                placeholder="e.g. 24CS099"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="std-name">Student Full Name *</Label>
+              <Input
+                id="std-name"
+                value={newStudent.full_name}
+                onChange={(e) => setNewStudent({ ...newStudent, full_name: e.target.value })}
+                placeholder="e.g. Rohan Malhotra"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="std-dept">Department *</Label>
+                <Input
+                  id="std-dept"
+                  value={newStudent.department}
+                  onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
+                  placeholder="Computer Science"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="std-sec">Section *</Label>
+                <Select
+                  value={newStudent.section}
+                  onValueChange={(v) => setNewStudent({ ...newStudent, section: v })}
+                >
+                  <SelectTrigger id="std-sec">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["A", "B", "C", "D", "E"].map((sec) => (
+                      <SelectItem key={sec} value={sec}>
+                        Section {sec}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="std-sem">Semester</Label>
+              <Input
+                id="std-sem"
+                type="number"
+                min={1}
+                max={12}
+                value={newStudent.semester}
+                onChange={(e) => setNewStudent({ ...newStudent, semester: parseInt(e.target.value) || 1 })}
+              />
+            </div>
+          </div>
+          <DialogFooter className="pt-3">
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="btn-3d"
+              disabled={createMutation.isPending || !newStudent.register_no.trim() || !newStudent.full_name.trim()}
+              onClick={() => createMutation.mutate(newStudent)}
+            >
+              {createMutation.isPending ? "Adding…" : "Add Student"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Edit Student Dialog */}
+      <Dialog open={editOpen} onOpenChange={(v) => !v && setEditOpen(false)}>
+        <DialogContent className="glass-strong max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="size-5 text-primary" />
+              Edit Student Details
+            </DialogTitle>
+          </DialogHeader>
+          {editingStudent && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-std-srn">Register Number / SRN *</Label>
+                <Input
+                  id="edit-std-srn"
+                  value={editingStudent.register_no}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, register_no: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-std-name">Student Full Name *</Label>
+                <Input
+                  id="edit-std-name"
+                  value={editingStudent.full_name}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, full_name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-std-dept">Department *</Label>
+                  <Input
+                    id="edit-std-dept"
+                    value={editingStudent.department}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, department: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-std-sec">Section *</Label>
+                  <Select
+                    value={editingStudent.section}
+                    onValueChange={(v) => setEditingStudent({ ...editingStudent, section: v })}
+                  >
+                    <SelectTrigger id="edit-std-sec">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["A", "B", "C", "D", "E"].map((sec) => (
+                        <SelectItem key={sec} value={sec}>
+                          Section {sec}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-std-sem">Semester</Label>
+                <Input
+                  id="edit-std-sem"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={editingStudent.semester}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, semester: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="pt-3">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="btn-3d"
+              disabled={updateMutation.isPending || !editingStudent?.register_no?.trim() || !editingStudent?.full_name?.trim()}
+              onClick={() => updateMutation.mutate(editingStudent)}
+            >
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

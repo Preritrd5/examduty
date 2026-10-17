@@ -1,16 +1,26 @@
 // @ts-nocheck
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { Shield, Users, ChevronDown, ChevronUp, UserCheck } from "lucide-react";
+import { Shield, Users, ChevronDown, ChevronUp, UserCheck, Edit2, Plus, Trash2, DoorOpen } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell, useMe } from "@/components/AppShell";
 import { HallImportDialog } from "@/components/HallImportDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listRooms } from "@/lib/invigilation.functions";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { listRooms, createRoom, updateRoom, deleteRoom } from "@/lib/invigilation.functions";
 
 export const Route = createFileRoute("/_authenticated/rooms")({
   head: () => ({
@@ -26,7 +36,17 @@ export const Route = createFileRoute("/_authenticated/rooms")({
   component: RoomsPage,
 });
 
-function RoomCard({ r }: { r: any }) {
+function RoomCard({
+  r,
+  isAdmin,
+  onEdit,
+  onDelete,
+}: {
+  r: any;
+  isAdmin: boolean;
+  onEdit: (room: any) => void;
+  onDelete: (room: any) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -34,12 +54,49 @@ function RoomCard({ r }: { r: any }) {
       <div>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="font-display text-base font-semibold">{r.room_number}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-display text-base font-semibold">{r.room_number}</p>
+              {r.active === false && (
+                <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
+                  Inactive
+                </Badge>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Floor {r.floor} · Capacity {r.capacity}
             </p>
           </div>
-          <Badge variant="default">2 duties assigned</Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge variant="default">2 duties assigned</Badge>
+            {isAdmin && (
+              <div className="flex items-center gap-0.5 no-print">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Edit Room"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(r);
+                  }}
+                >
+                  <Edit2 className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-destructive hover:bg-destructive/10"
+                  title="Delete Room"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(r);
+                  }}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Assigned Invigilators (Main Faculty & Non-Teaching Staff) */}
@@ -135,11 +192,78 @@ function RoomCard({ r }: { r: any }) {
 }
 
 function RoomsPage() {
+  const qc = useQueryClient();
   const fn = useServerFn(listRooms);
+  const createFn = useServerFn(createRoom);
+  const updateFn = useServerFn(updateRoom);
+  const deleteFn = useServerFn(deleteRoom);
+
   const { data } = useQuery({ queryKey: ["rooms"], queryFn: () => fn() });
   const [q, setQ] = useState("");
   const { data: me } = useMe();
   const isAdmin = Boolean(me?.isAdmin);
+
+  // Add Hall State
+  const [addOpen, setAddOpen] = useState(false);
+  const [newRoom, setNewRoom] = useState({
+    room_number: "",
+    floor: 1,
+    block: "Block A",
+    capacity: 30,
+  });
+
+  // Edit Hall State
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<any | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: (roomData: any) => createFn({ data: roomData }),
+    onSuccess: () => {
+      toast.success("Examination hall added successfully");
+      setAddOpen(false);
+      setNewRoom({ room_number: "", floor: 1, block: "Block A", capacity: 30 });
+      qc.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (e: any) => toast.error("Failed to add hall: " + e.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (roomData: any) => updateFn({ data: roomData }),
+    onSuccess: () => {
+      toast.success("Examination hall updated successfully");
+      setEditOpen(false);
+      setEditingRoom(null);
+      qc.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (e: any) => toast.error("Failed to update hall: " + e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (roomId: string) => deleteFn({ data: { roomId } }),
+    onSuccess: () => {
+      toast.success("Examination hall removed");
+      qc.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (e: any) => toast.error("Failed to delete hall: " + e.message),
+  });
+
+  const handleEditClick = (room: any) => {
+    setEditingRoom({
+      id: room.id,
+      room_number: room.room_number,
+      floor: room.floor ?? 1,
+      block: room.block ?? "Block A",
+      capacity: room.capacity ?? 30,
+      active: room.active !== false,
+    });
+    setEditOpen(true);
+  };
+
+  const handleDeleteClick = (room: any) => {
+    if (confirm(`Are you sure you want to remove hall ${room.room_number}?`)) {
+      deleteMutation.mutate(room.id);
+    }
+  };
 
   const grouped = useMemo(() => {
     const rooms = (data ?? []).filter((r: any) => r.room_number.toLowerCase().includes(q.toLowerCase()));
@@ -161,28 +285,40 @@ function RoomsPage() {
       title="Halls & Floors"
       description={`${data?.length ?? 0} examination halls · Main Faculty & Support Staff assigned · Serial-wise seating with SRNs`}
       actions={
-        <>
+        <div className="flex flex-wrap items-center gap-2">
           <Input
             placeholder="Search hall (e.g. A-101)…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-40 sm:w-48 no-print"
+            className="w-36 sm:w-48 no-print"
           />
           <Button
             variant="outline"
             size="sm"
             onClick={() => window.print()}
             title="Print Official Hall Duty & Seating Matrix"
-            className="no-print"
+            className="no-print gap-1.5"
           >
-            Print Seating Matrix
+            Print Matrix
           </Button>
+
           {isAdmin ? (
-            <HallImportDialog halls={data ?? []} />
+            <div className="flex items-center gap-2 no-print">
+              <Button
+                size="sm"
+                className="btn-3d flex items-center gap-1.5"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="size-4" /> Add Hall
+              </Button>
+              <HallImportDialog halls={data ?? []} />
+            </div>
           ) : (
-            <Badge variant="secondary" className="no-print">Faculty View</Badge>
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs font-semibold no-print">
+              Faculty View · Read Only
+            </Badge>
           )}
-        </>
+        </div>
       }
     >
       {/* Official Print Header */}
@@ -202,14 +338,174 @@ function RoomsPage() {
                 {rooms.reduce((n, r) => n + r.seated, 0)} students seated
               </span>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {rooms.map((r) => (
-                <RoomCard key={r.id} r={r} />
+                <RoomCard
+                  key={r.id}
+                  r={r}
+                  isAdmin={isAdmin}
+                  onEdit={handleEditClick}
+                  onDelete={handleDeleteClick}
+                />
               ))}
             </div>
           </section>
         ))}
       </div>
+
+      {/* Admin Add Hall Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="glass-strong max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DoorOpen className="size-5 text-primary" />
+              Add Examination Hall
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="room-number">Hall / Room Number *</Label>
+              <Input
+                id="room-number"
+                value={newRoom.room_number}
+                onChange={(e) => setNewRoom({ ...newRoom, room_number: e.target.value })}
+                placeholder="e.g. A-601"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="room-floor">Floor *</Label>
+                <Input
+                  id="room-floor"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={newRoom.floor}
+                  onChange={(e) => setNewRoom({ ...newRoom, floor: parseInt(e.target.value) || 1 })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="room-block">Block *</Label>
+                <Input
+                  id="room-block"
+                  value={newRoom.block}
+                  onChange={(e) => setNewRoom({ ...newRoom, block: e.target.value })}
+                  placeholder="Block A"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="room-cap">Student Capacity *</Label>
+              <Input
+                id="room-cap"
+                type="number"
+                min={1}
+                max={300}
+                value={newRoom.capacity}
+                onChange={(e) => setNewRoom({ ...newRoom, capacity: parseInt(e.target.value) || 30 })}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter className="pt-3">
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="btn-3d"
+              disabled={createMutation.isPending || !newRoom.room_number.trim()}
+              onClick={() => createMutation.mutate(newRoom)}
+            >
+              {createMutation.isPending ? "Creating…" : "Create Hall"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Edit Hall Dialog */}
+      <Dialog open={editOpen} onOpenChange={(v) => !v && setEditOpen(false)}>
+        <DialogContent className="glass-strong max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="size-5 text-primary" />
+              Edit Examination Hall
+            </DialogTitle>
+          </DialogHeader>
+          {editingRoom && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-room-number">Hall / Room Number *</Label>
+                <Input
+                  id="edit-room-number"
+                  value={editingRoom.room_number}
+                  onChange={(e) => setEditingRoom({ ...editingRoom, room_number: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-room-floor">Floor *</Label>
+                  <Input
+                    id="edit-room-floor"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={editingRoom.floor}
+                    onChange={(e) => setEditingRoom({ ...editingRoom, floor: parseInt(e.target.value) || 1 })}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-room-block">Block *</Label>
+                  <Input
+                    id="edit-room-block"
+                    value={editingRoom.block}
+                    onChange={(e) => setEditingRoom({ ...editingRoom, block: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-room-cap">Student Capacity *</Label>
+                <Input
+                  id="edit-room-cap"
+                  type="number"
+                  min={1}
+                  max={300}
+                  value={editingRoom.capacity}
+                  onChange={(e) => setEditingRoom({ ...editingRoom, capacity: parseInt(e.target.value) || 30 })}
+                  required
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="edit-room-active"
+                  checked={editingRoom.active}
+                  onCheckedChange={(checked) => setEditingRoom({ ...editingRoom, active: Boolean(checked) })}
+                />
+                <Label htmlFor="edit-room-active" className="text-xs cursor-pointer">
+                  Hall is Active and available for duty allocations
+                </Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="pt-3">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="btn-3d"
+              disabled={updateMutation.isPending || !editingRoom?.room_number?.trim()}
+              onClick={() => updateMutation.mutate(editingRoom)}
+            >
+              {updateMutation.isPending ? "Saving…" : "Save Hall Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

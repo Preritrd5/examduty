@@ -214,29 +214,29 @@ function ExamDetailPage() {
           : undefined
       }
       actions={
-        <>
-          <Button variant="outline" size="sm" onClick={() => exportDuties()} disabled={!data} className="no-print">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => exportDuties()} disabled={!data} className="no-print gap-1.5">
             <Download className="size-4" /> Duty chart
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportSeating()} disabled={!data} className="no-print">
+          <Button variant="outline" size="sm" onClick={() => exportSeating()} disabled={!data} className="no-print gap-1.5">
             <Download className="size-4" /> Seating
           </Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="no-print">
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="no-print gap-1.5">
             <Printer className="size-4" /> Print
           </Button>
           {!isAdmin ? (
             <Badge variant="secondary" className="no-print">Faculty View · View Only</Badge>
           ) : (
-        <>
-          <Button onClick={() => generate.mutate()} disabled={generate.isPending || !isAdmin} className="no-print btn-3d">
-            <Sparkles className="size-4" /> Generate allocation
-          </Button>
-          <Button variant="outline" onClick={() => publish.mutate()} disabled={publish.isPending || !isAdmin} className="no-print">
-            <Send className="size-4" /> {published ? "Unpublish" : "Publish"}
-          </Button>
-        </>
+            <>
+              <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending || !isAdmin} className="no-print btn-3d gap-1.5">
+                <Sparkles className="size-4" /> Generate allocation
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => publish.mutate()} disabled={publish.isPending || !isAdmin} className="no-print gap-1.5">
+                <Send className="size-4" /> {published ? "Unpublish" : "Publish"}
+              </Button>
+            </>
           )}
-        </>
+        </div>
       }
     >
       {/* Official Print Header */}
@@ -319,8 +319,8 @@ function ExamDetailPage() {
                               </p>
                             </div>
                             {isAdmin ? (
-                              <Button size="icon" variant="ghost" onClick={() => drop.mutate(d.id)}>
-                                <X className="size-4" />
+                              <Button size="icon-xs" variant="ghost" onClick={() => drop.mutate(d.id)}>
+                                <X className="size-3.5" />
                               </Button>
                             ) : null}
                           </div>

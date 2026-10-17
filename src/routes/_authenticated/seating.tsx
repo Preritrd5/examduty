@@ -190,7 +190,6 @@ function SeatingPage() {
   const { data: seating = [], isLoading } = useQuery({
     queryKey: ["seating"],
     queryFn: () => listFn(),
-    enabled: isAdmin,
     refetchInterval: 10000,
   });
 
@@ -221,20 +220,6 @@ function SeatingPage() {
     w.print();
   }
 
-  if (!isAdmin) {
-    return (
-      <AppShell title="Seating Arrangement — Access Restricted">
-        <div className="glass rounded-2xl p-12 text-center flex flex-col items-center gap-3">
-          <ShieldAlert className="size-12 text-destructive" />
-          <h2 className="text-lg font-semibold">Admin Access Required</h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            Student Seating Arrangement & Room Generation is managed strictly by the Examination Cell Admin.
-          </p>
-        </div>
-      </AppShell>
-    );
-  }
-
   const seatingRows = seating as any[];
   const totalSeated = seatingRows.reduce((a, b) => a + (b.seated || 0), 0);
   const currentExam = EXAMS2[0];
@@ -251,18 +236,21 @@ function SeatingPage() {
       title="Seating Arrangement & Allotment Chart"
       description="Official Sapthagiri NPS University Room-wise Student Allotment Chart"
       actions={
-        <div className="flex gap-2">
-          <Button
-            onClick={() => genMut.mutate()}
-            disabled={genMut.isPending}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw className={`size-4 ${genMut.isPending ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">{genMut.isPending ? "Shuffling…" : "Re-Generate & Shuffle"}</span>
-            <span className="sm:hidden">{genMut.isPending ? "Shuffle…" : "Shuffle"}</span>
-          </Button>
-          <Button onClick={handlePrint} size="sm" className="btn-3d">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <Button
+              onClick={() => genMut.mutate()}
+              disabled={genMut.isPending}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              <RefreshCw className={`size-4 ${genMut.isPending ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">{genMut.isPending ? "Shuffling…" : "Re-Generate & Shuffle"}</span>
+              <span className="sm:hidden">{genMut.isPending ? "Shuffle…" : "Shuffle"}</span>
+            </Button>
+          )}
+          <Button onClick={handlePrint} size="sm" className="btn-3d gap-1.5">
             <Printer className="size-4" />
             <span className="hidden sm:inline">Print All Pages</span>
             <span className="sm:hidden">Print</span>
@@ -290,9 +278,13 @@ function SeatingPage() {
               <p className="text-xs font-medium uppercase text-muted-foreground">B-Form Link</p>
               <p className="text-sm font-semibold mt-1">Generate Room B-Forms</p>
             </div>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/forms/b-form"><FileText className="size-4" />Open B-Form</Link>
-            </Button>
+            {isAdmin ? (
+              <Button asChild size="sm" variant="outline" className="gap-1.5">
+                <Link to="/forms/b-form"><FileText className="size-4" />Open B-Form</Link>
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground font-medium">Exam Cell Admin</span>
+            )}
           </div>
         </div>
 
@@ -323,7 +315,7 @@ function SeatingPage() {
           ) : seatingRows.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-muted-foreground mb-4">No seating arrangement generated yet.</p>
-              <Button onClick={() => genMut.mutate()} disabled={genMut.isPending} className="btn-3d">
+              <Button onClick={() => genMut.mutate()} disabled={genMut.isPending} className="btn-3d gap-1.5">
                 <Wand2 className="size-4" /> Generate Seating Chart
               </Button>
             </div>

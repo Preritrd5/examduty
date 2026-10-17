@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedAcademicCalendarRouteImport } from './routes/_authenticated/academic-calendar'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDutySwapRouteImport } from './routes/_authenticated/duty-swap'
 import { Route as AuthenticatedEmergencyRouteImport } from './routes/_authenticated/emergency'
@@ -23,6 +24,9 @@ import { Route as AuthenticatedSeatingRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
 import { Route as AuthenticatedTeachersRouteImport } from './routes/_authenticated/teachers'
+import { Route as AuthenticatedTestManagementRouteImport } from './routes/_authenticated/test-management'
+import { Route as AuthenticatedTimetableRouteImport } from './routes/_authenticated/timetable'
+import { Route as AuthenticatedTimetableAllocationRouteImport } from './routes/_authenticated/timetable-allocation'
 import { Route as AuthenticatedExamsIndexRouteImport } from './routes/_authenticated/exams.index'
 import { Route as AuthenticatedExamsExamIdRouteImport } from './routes/_authenticated/exams.$examId'
 import { Route as AuthenticatedFormsAFormRouteImport } from './routes/_authenticated/forms/a-form'
@@ -43,6 +47,12 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAcademicCalendarRoute =
+  AuthenticatedAcademicCalendarRouteImport.update({
+    id: '/academic-calendar',
+    path: '/academic-calendar',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -100,6 +110,23 @@ const AuthenticatedTeachersRoute = AuthenticatedTeachersRouteImport.update({
   path: '/teachers',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTestManagementRoute =
+  AuthenticatedTestManagementRouteImport.update({
+    id: '/test-management',
+    path: '/test-management',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTimetableRoute = AuthenticatedTimetableRouteImport.update({
+  id: '/timetable',
+  path: '/timetable',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTimetableAllocationRoute =
+  AuthenticatedTimetableAllocationRouteImport.update({
+    id: '/timetable-allocation',
+    path: '/timetable-allocation',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedExamsIndexRoute = AuthenticatedExamsIndexRouteImport.update({
   id: '/exams/',
   path: '/exams/',
@@ -131,6 +158,7 @@ const AuthenticatedFormsTenancyFormRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/academic-calendar': typeof AuthenticatedAcademicCalendarRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/duty-swap': typeof AuthenticatedDutySwapRoute
   '/emergency': typeof AuthenticatedEmergencyRoute
@@ -142,6 +170,9 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/students': typeof AuthenticatedStudentsRoute
   '/teachers': typeof AuthenticatedTeachersRoute
+  '/test-management': typeof AuthenticatedTestManagementRoute
+  '/timetable': typeof AuthenticatedTimetableRoute
+  '/timetable-allocation': typeof AuthenticatedTimetableAllocationRoute
   '/exams/$examId': typeof AuthenticatedExamsExamIdRoute
   '/forms/a-form': typeof AuthenticatedFormsAFormRoute
   '/forms/b-form': typeof AuthenticatedFormsBFormRoute
@@ -151,6 +182,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/academic-calendar': typeof AuthenticatedAcademicCalendarRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/duty-swap': typeof AuthenticatedDutySwapRoute
   '/emergency': typeof AuthenticatedEmergencyRoute
@@ -162,6 +194,9 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/students': typeof AuthenticatedStudentsRoute
   '/teachers': typeof AuthenticatedTeachersRoute
+  '/test-management': typeof AuthenticatedTestManagementRoute
+  '/timetable': typeof AuthenticatedTimetableRoute
+  '/timetable-allocation': typeof AuthenticatedTimetableAllocationRoute
   '/exams/$examId': typeof AuthenticatedExamsExamIdRoute
   '/forms/a-form': typeof AuthenticatedFormsAFormRoute
   '/forms/b-form': typeof AuthenticatedFormsBFormRoute
@@ -173,6 +208,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/academic-calendar': typeof AuthenticatedAcademicCalendarRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/duty-swap': typeof AuthenticatedDutySwapRoute
   '/_authenticated/emergency': typeof AuthenticatedEmergencyRoute
@@ -184,6 +220,9 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/students': typeof AuthenticatedStudentsRoute
   '/_authenticated/teachers': typeof AuthenticatedTeachersRoute
+  '/_authenticated/test-management': typeof AuthenticatedTestManagementRoute
+  '/_authenticated/timetable': typeof AuthenticatedTimetableRoute
+  '/_authenticated/timetable-allocation': typeof AuthenticatedTimetableAllocationRoute
   '/_authenticated/exams/$examId': typeof AuthenticatedExamsExamIdRoute
   '/_authenticated/forms/a-form': typeof AuthenticatedFormsAFormRoute
   '/_authenticated/forms/b-form': typeof AuthenticatedFormsBFormRoute
@@ -195,6 +234,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/academic-calendar'
     | '/dashboard'
     | '/duty-swap'
     | '/emergency'
@@ -206,6 +246,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/students'
     | '/teachers'
+    | '/test-management'
+    | '/timetable'
+    | '/timetable-allocation'
     | '/exams/$examId'
     | '/forms/a-form'
     | '/forms/b-form'
@@ -215,6 +258,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/academic-calendar'
     | '/dashboard'
     | '/duty-swap'
     | '/emergency'
@@ -226,6 +270,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/students'
     | '/teachers'
+    | '/test-management'
+    | '/timetable'
+    | '/timetable-allocation'
     | '/exams/$examId'
     | '/forms/a-form'
     | '/forms/b-form'
@@ -236,6 +283,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/academic-calendar'
     | '/_authenticated/dashboard'
     | '/_authenticated/duty-swap'
     | '/_authenticated/emergency'
@@ -247,6 +295,9 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/students'
     | '/_authenticated/teachers'
+    | '/_authenticated/test-management'
+    | '/_authenticated/timetable'
+    | '/_authenticated/timetable-allocation'
     | '/_authenticated/exams/$examId'
     | '/_authenticated/forms/a-form'
     | '/_authenticated/forms/b-form'
@@ -282,6 +333,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/academic-calendar': {
+      id: '/_authenticated/academic-calendar'
+      path: '/academic-calendar'
+      fullPath: '/academic-calendar'
+      preLoaderRoute: typeof AuthenticatedAcademicCalendarRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
@@ -360,6 +418,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeachersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/test-management': {
+      id: '/_authenticated/test-management'
+      path: '/test-management'
+      fullPath: '/test-management'
+      preLoaderRoute: typeof AuthenticatedTestManagementRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/timetable': {
+      id: '/_authenticated/timetable'
+      path: '/timetable'
+      fullPath: '/timetable'
+      preLoaderRoute: typeof AuthenticatedTimetableRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/timetable-allocation': {
+      id: '/_authenticated/timetable-allocation'
+      path: '/timetable-allocation'
+      fullPath: '/timetable-allocation'
+      preLoaderRoute: typeof AuthenticatedTimetableAllocationRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/exams/': {
       id: '/_authenticated/exams/'
       path: '/exams'
@@ -399,6 +478,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAcademicCalendarRoute: typeof AuthenticatedAcademicCalendarRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDutySwapRoute: typeof AuthenticatedDutySwapRoute
   AuthenticatedEmergencyRoute: typeof AuthenticatedEmergencyRoute
@@ -410,6 +490,9 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRoute
   AuthenticatedTeachersRoute: typeof AuthenticatedTeachersRoute
+  AuthenticatedTestManagementRoute: typeof AuthenticatedTestManagementRoute
+  AuthenticatedTimetableRoute: typeof AuthenticatedTimetableRoute
+  AuthenticatedTimetableAllocationRoute: typeof AuthenticatedTimetableAllocationRoute
   AuthenticatedExamsExamIdRoute: typeof AuthenticatedExamsExamIdRoute
   AuthenticatedFormsAFormRoute: typeof AuthenticatedFormsAFormRoute
   AuthenticatedFormsBFormRoute: typeof AuthenticatedFormsBFormRoute
@@ -418,6 +501,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAcademicCalendarRoute: AuthenticatedAcademicCalendarRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDutySwapRoute: AuthenticatedDutySwapRoute,
   AuthenticatedEmergencyRoute: AuthenticatedEmergencyRoute,
@@ -429,6 +513,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedStudentsRoute: AuthenticatedStudentsRoute,
   AuthenticatedTeachersRoute: AuthenticatedTeachersRoute,
+  AuthenticatedTestManagementRoute: AuthenticatedTestManagementRoute,
+  AuthenticatedTimetableRoute: AuthenticatedTimetableRoute,
+  AuthenticatedTimetableAllocationRoute: AuthenticatedTimetableAllocationRoute,
   AuthenticatedExamsExamIdRoute: AuthenticatedExamsExamIdRoute,
   AuthenticatedFormsAFormRoute: AuthenticatedFormsAFormRoute,
   AuthenticatedFormsBFormRoute: AuthenticatedFormsBFormRoute,

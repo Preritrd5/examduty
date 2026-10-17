@@ -20,6 +20,10 @@ import {
   ScrollText,
   Menu,
   User,
+  Monitor,
+  CalendarRange,
+  CalendarCheck,
+  Shield,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -38,6 +42,9 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/dashboard", label: "Control Centre", icon: LayoutDashboard },
+  { to: "/academic-calendar", label: "Academic Timeline", icon: CalendarRange },
+  { to: "/timetable-allocation", label: "Timetable & Allocation", icon: CalendarCheck },
+  { to: "/test-management", label: "Test & Lab Operations", icon: Monitor },
   { to: "/exams", label: "Examinations", icon: CalendarDays },
   { to: "/rooms", label: "Halls & Floors", icon: DoorOpen },
   { to: "/students", label: "Students", icon: GraduationCap },
@@ -55,11 +62,70 @@ const NAV = [
 
 const ADMIN_ONLY = new Set<string>([
   "/settings",
+  "/forms/a-form",
+  "/forms/b-form",
+  "/teachers",
 ]);
 
 export function useMe() {
   const fn = useServerFn(getMe);
-  return useQuery({ queryKey: ["me"], queryFn: () => fn(), retry: false });
+  const query = useQuery({ queryKey: ["me"], queryFn: () => fn(), retry: false });
+  const [mockUser, setMockUser] = useState<any>(() => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("mock_user") : null;
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const syncUser = () => {
+      try {
+        const raw = localStorage.getItem("mock_user");
+        setMockUser(raw ? JSON.parse(raw) : null);
+      } catch {
+        setMockUser(null);
+      }
+    };
+
+    syncUser();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "mock_user" || e.key === null) {
+        syncUser();
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("local-auth-change", syncUser);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("local-auth-change", syncUser);
+    };
+  }, []);
+
+  const data = query.data || mockUser ? {
+    ...(query.data || {}),
+    ...(mockUser || {}),
+    profile: {
+      ...(query.data?.profile || {}),
+      ...(mockUser || {}),
+      id: mockUser?.id || mockUser?.employee_id || query.data?.profile?.id,
+      full_name: mockUser?.full_name || query.data?.profile?.full_name || "Dr. Aarav Sharma",
+      department: mockUser?.department || query.data?.profile?.department || "Computer Science",
+      designation: mockUser?.designation || query.data?.profile?.designation || "Assistant Professor",
+    },
+    full_name: mockUser?.full_name || query.data?.full_name || query.data?.profile?.full_name,
+    isAdmin: mockUser ? mockUser.role === "admin" : Boolean(query.data?.isAdmin),
+    isSuperAdmin: mockUser ? mockUser.role === "admin" : Boolean(query.data?.isSuperAdmin),
+  } : undefined;
+
+  return {
+    ...query,
+    data,
+  };
 }
 
 export function AppShell({
@@ -76,43 +142,67 @@ export function AppShell({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { data: meServer } = useMe();
-  const [hasSession, setHasSession] = useState(false);
-  const [me, setMe] = useState<any>(null);
+  const { data: me } = useMe();
+  const [hasSession, setHasSession] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("mock_user"));
+  });
 
   useEffect(() => {
-    let active = true;
-    const mockUserStr = localStorage.getItem("mock_user");
+    const handleAuthSync = () => {
+      const raw = localStorage.getItem("mock_user");
+      if (!raw) {
+        setHasSession(false);
+        queryClient.clear();
+        navigate({
+          to: "/auth",
+          search: { next: pathname !== "/auth" ? pathname : undefined },
+          replace: true,
+        });
+        return;
+      }
 
-    if (mockUserStr) {
-      const mockUser = JSON.parse(mockUserStr);
-      setHasSession(true);
+      try {
+        const parsed = JSON.parse(raw);
+        setHasSession(true);
+        // If current role is faculty and current page is restricted to Admin, safely route to /dashboard
+        if (parsed.role !== "admin" && ADMIN_ONLY.has(pathname)) {
+          navigate({ to: "/dashboard", replace: true });
+        }
+      } catch {
+        setHasSession(false);
+        localStorage.removeItem("mock_user");
+        queryClient.clear();
+        navigate({
+          to: "/auth",
+          search: { next: pathname !== "/auth" ? pathname : undefined },
+          replace: true,
+        });
+      }
+    };
 
-      const mergedProfile = {
-        ...(meServer?.profile || {}),
-        ...mockUser,
-        id: mockUser.id || mockUser.employee_id || meServer?.profile?.id,
-        full_name: mockUser.full_name || meServer?.profile?.full_name || "Dr. Aarav Sharma",
-        department: mockUser.department || meServer?.profile?.department || "Computer Science",
-        designation: mockUser.designation || meServer?.profile?.designation || "Assistant Professor",
-      };
+    handleAuthSync();
 
-      setMe({
-        ...meServer,
-        ...mockUser,
-        profile: mergedProfile,
-        full_name: mergedProfile.full_name,
-        isAdmin: mockUser.role === "admin"
-      });
-    } else {
-      setHasSession(false);
-      navigate({ to: "/auth", replace: true });
-    }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "mock_user" || e.key === null) {
+        queryClient.invalidateQueries();
+        handleAuthSync();
+      }
+    };
+
+    const onLocalAuthChange = () => {
+      queryClient.invalidateQueries();
+      handleAuthSync();
+    };
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("local-auth-change", onLocalAuthChange);
 
     return () => {
-      active = false;
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("local-auth-change", onLocalAuthChange);
     };
-  }, [pathname, navigate, meServer]);
+  }, [pathname, navigate, queryClient]);
 
   const emergenciesFn = useServerFn(listEmergencies);
   const staffReqFn = useServerFn(listStaffRequests);
@@ -148,6 +238,7 @@ export function AppShell({
     await queryClient.cancelQueries();
     queryClient.clear();
     localStorage.removeItem("mock_user");
+    window.dispatchEvent(new Event("local-auth-change"));
     navigate({ to: "/auth", replace: true });
   }
 
@@ -207,6 +298,37 @@ export function AppShell({
           </div>
         </div>
 
+        {/* Portal Role Indicator - 3D Accent */}
+        <div className="px-3 pt-3">
+          {isAdmin ? (
+            <div className="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-500/20 to-sky-500/10 px-3 py-2.5 text-xs text-indigo-200 font-semibold flex items-center gap-2.5 shadow-md card-3d glow-pulse-indigo">
+              <div className="size-6 rounded-lg bg-indigo-500/30 flex items-center justify-center border border-indigo-400/40 floating-3d shrink-0">
+                <Shield className="size-3.5 text-indigo-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="leading-tight font-bold text-white flex items-center gap-1.5">
+                  <span>Admin Portal</span>
+                  <span className="size-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                </p>
+                <p className="text-[10px] text-indigo-200/80 font-normal">Superuser Controls Active</p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 px-3 py-2.5 text-xs text-amber-200 font-semibold flex items-center gap-2.5 shadow-md card-3d">
+              <div className="size-6 rounded-lg bg-amber-500/30 flex items-center justify-center border border-amber-400/40 floating-3d shrink-0">
+                <GraduationCap className="size-3.5 text-amber-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="leading-tight font-bold text-white flex items-center gap-1.5">
+                  <span>Faculty Portal</span>
+                  <span className="size-1.5 rounded-full bg-amber-400 inline-block" />
+                </p>
+                <p className="text-[10px] text-amber-200/80 font-normal">Teacher Mode · Read Only</p>
+              </div>
+            </div>
+          )}
+        </div>
+
         <nav className="flex-1 space-y-1 p-3 overflow-y-auto overscroll-contain">{navLinks(false)}</nav>
 
         <div className="border-t border-sidebar-border p-3">
@@ -252,6 +374,35 @@ export function AppShell({
                     <p className="text-[11px] opacity-75 font-medium">Exam Cell</p>
                   </div>
                 </div>
+                <div className="px-3 pt-3">
+                  {isAdmin ? (
+                    <div className="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-500/20 to-sky-500/10 px-3 py-2.5 text-xs text-indigo-200 font-semibold flex items-center gap-2.5 shadow-md card-3d">
+                      <div className="size-6 rounded-lg bg-indigo-500/30 flex items-center justify-center border border-indigo-400/40 floating-3d shrink-0">
+                        <Shield className="size-3.5 text-indigo-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="leading-tight font-bold text-white flex items-center gap-1.5">
+                          <span>Admin Portal</span>
+                          <span className="size-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
+                        </p>
+                        <p className="text-[10px] text-indigo-200/80 font-normal">Full Edit & Management Access</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 px-3 py-2.5 text-xs text-amber-200 font-semibold flex items-center gap-2.5 shadow-md card-3d">
+                      <div className="size-6 rounded-lg bg-amber-500/30 flex items-center justify-center border border-amber-400/40 floating-3d shrink-0">
+                        <GraduationCap className="size-3.5 text-amber-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="leading-tight font-bold text-white flex items-center gap-1.5">
+                          <span>Faculty Portal</span>
+                          <span className="size-1.5 rounded-full bg-amber-400 inline-block" />
+                        </p>
+                        <p className="text-[10px] text-amber-200/80 font-normal">Teacher Mode · View & Swaps</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">{navLinks(true)}</nav>
                 <div className="border-t border-border/50 bg-muted/30 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                   <div className="flex items-center justify-between gap-2">
@@ -279,7 +430,7 @@ export function AppShell({
             </div>
 
             {actions ? (
-              <div className="app-header-actions order-last flex w-full min-w-0 items-center gap-2 overflow-x-auto md:order-none md:w-auto md:max-w-[min(28rem,42vw)] lg:max-w-none">
+              <div className="app-header-actions order-last flex min-w-0 flex-wrap items-center gap-2 md:order-none md:flex-nowrap shrink-0">
                 {actions}
               </div>
             ) : null}
@@ -323,7 +474,7 @@ export function AppShell({
             </DropdownMenu>
           </div>
         </header>
-        <main className="mx-auto w-full min-w-0 max-w-7xl flex-1 overflow-x-clip p-3 sm:p-6 lg:p-8">
+        <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 overflow-x-clip px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
           {children}
         </main>
       </div>

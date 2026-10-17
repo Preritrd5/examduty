@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -56,8 +56,31 @@ const pick = (row: Record<string, unknown>, keys: string[]) => {
   return undefined;
 };
 
-const REGISTER_KEYS = ["registerno", "regno", "registernumber", "rollno", "rollnumber", "register"];
-const NAME_KEYS = ["fullname", "name", "studentname"];
+const REGISTER_KEYS = [
+  "registerno",
+  "regno",
+  "registernumber",
+  "rollno",
+  "rollnumber",
+  "register",
+  "srn",
+  "usn",
+  "studentid",
+  "studentno",
+  "reg",
+  "registrationno",
+  "admnno",
+  "admissionno",
+];
+const NAME_KEYS = [
+  "fullname",
+  "name",
+  "studentname",
+  "candidatename",
+  "student",
+  "studentfullname",
+  "firstandlastname",
+];
 
 const hasColumn = (headers: string[], keys: string[]) => headers.some((h) => keys.includes(h));
 
@@ -84,9 +107,9 @@ function parseSheet(buffer: ArrayBuffer): ParseResult {
     const register = pick(raw, REGISTER_KEYS);
     const name = pick(raw, NAME_KEYS);
     const serial = pick(raw, ["sno", "serialno", "serial", "sino", "slno"]); // ignored later, but we check for blankness
-    const semester = pick(raw, ["semester", "sem"]);
-    const department = pick(raw, ["department", "dept", "branch", "course"]);
-    const section = pick(raw, ["section", "sec"]);
+    const semester = pick(raw, ["semester", "sem", "term", "year"]);
+    const department = pick(raw, ["department", "dept", "branch", "course", "program", "stream"]);
+    const section = pick(raw, ["section", "sec", "secname", "class"]);
     const hall = pick(raw, ["hall", "room", "roomno", "roomnumber"]);
     const floorRaw = pick(raw, ["floor", "floorno"]);
 
@@ -339,7 +362,9 @@ export function StudentImportDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="btn-3d">Import Excel</Button>
+        <Button className="btn-3d flex items-center gap-1.5 shadow-sm">
+          <FileSpreadsheet className="size-4" /> Import Excel / CSV
+        </Button>
       </DialogTrigger>
       <DialogContent className="glass-strong sm:max-w-3xl max-h-[90vh] overflow-y-auto flex flex-col">
         <DialogHeader>

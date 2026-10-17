@@ -67,7 +67,13 @@ function NotificationsPage() {
   const { data: staff } = useQuery({ queryKey: ["teachers"], queryFn: () => teachersFn(), enabled: isAdmin });
   const { data: notices = [] } = useQuery({ queryKey: ["admin-notices"], queryFn: () => listNoticesFn(), refetchInterval: 10000 });
   const myDutiesFn = useServerFn(myDuties);
-  const { data: duties = [] } = useQuery({ queryKey: ["my-duties"], queryFn: () => myDutiesFn(), enabled: !isAdmin, refetchInterval: 10000 });
+  const teacherId = me?.profile?.id || me?.employee_id || me?.id;
+  const { data: duties = [] } = useQuery({
+    queryKey: ["my-duties", teacherId],
+    queryFn: () => myDutiesFn({ data: { teacherId: teacherId || "EMP1001" } }),
+    enabled: !isAdmin,
+    refetchInterval: 10000,
+  });
 
   const [newNoticeTitle, setNewNoticeTitle] = useState("");
   const [newNoticeContent, setNewNoticeContent] = useState("");
@@ -239,11 +245,11 @@ function NotificationsPage() {
                 </div>
                 <Button
                   size="sm"
-                  className="btn-3d"
+                  className="btn-3d gap-1.5"
                   disabled={createNoticeMut.isPending || !newNoticeTitle.trim() || !newNoticeContent.trim()}
                   onClick={() => createNoticeMut.mutate({ title: newNoticeTitle.trim(), content: newNoticeContent.trim() })}
                 >
-                  <Plus className="mr-1 size-4" /> Publish Announcement
+                  <Plus className="size-4" /> Publish Announcement
                 </Button>
               </div>
             </section>
@@ -286,8 +292,8 @@ function NotificationsPage() {
                     {isAdmin && (
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground hover:text-destructive absolute top-3 right-3"
+                        size="icon-xs"
+                        className="text-muted-foreground hover:text-destructive absolute top-3 right-3"
                         onClick={() => deleteNoticeMut.mutate(n.id)}
                         disabled={deleteNoticeMut.isPending}
                       >
@@ -311,8 +317,8 @@ function NotificationsPage() {
                   <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Admin Filters</h3>
                   <Button
                     variant={unreadOnly ? "default" : "outline"}
-                    size="icon"
-                    className="size-7 rounded-lg"
+                    size="icon-xs"
+                    className="rounded-lg"
                     onClick={() => setUnreadOnly((v) => !v)}
                     title="Toggle Unread Only"
                   >

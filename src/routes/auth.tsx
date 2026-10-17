@@ -19,11 +19,22 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { next } = Route.useSearch();
-  
-  const [empId, setEmpId] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const search = Route.useSearch();
+  const rawNext = search?.next;
+  const safeNext =
+    rawNext && typeof rawNext === "string" && rawNext.startsWith("/") && !rawNext.startsWith("//") && rawNext !== "/auth"
+      ? rawNext
+      : "/dashboard";
+
+  // Separate states for faculty and admin to prevent cross-tab form pollution
+  const [facultyEmpId, setFacultyEmpId] = useState("");
+  const [facultyPassword, setFacultyPassword] = useState("");
+  const [showFacultyPassword, setShowFacultyPassword] = useState(false);
+
+  const [adminId, setAdminId] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [teachers, setTeachers] = useState<any[]>([]);
 
@@ -31,37 +42,47 @@ function AuthPage() {
     // Check if already logged in
     const mockUser = localStorage.getItem("mock_user");
     if (mockUser) {
-      const u = JSON.parse(mockUser);
-      navigate({ to: "/dashboard", replace: true });
+      try {
+        const u = JSON.parse(mockUser);
+        if (u && (u.id || u.employee_id)) {
+          navigate({ to: safeNext as any, replace: true });
+          return;
+        }
+      } catch {
+        localStorage.removeItem("mock_user");
+      }
     }
-    
+
     // Load mock teachers for demo
     listTeachers().then(setTeachers).catch(console.error);
-  }, [navigate]);
+  }, [navigate, safeNext]);
 
   async function handleFacultyLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    
-    // Mock login logic
+
     setTimeout(() => {
       setLoading(false);
-      const upperId = empId.toUpperCase();
+      const upperId = facultyEmpId.trim().toUpperCase();
       const teacher =
         teachers.find((t) => String(t.employee_id || "").toUpperCase() === upperId) ||
         teachers.find((t) => String(t.id || "").toUpperCase() === upperId);
-      
-      if (teacher && password === teacher.password) {
-        localStorage.setItem("mock_user", JSON.stringify({
-          ...teacher,
-          role: "faculty"
-        }));
+
+      if (teacher && facultyPassword === teacher.password) {
+        localStorage.setItem(
+          "mock_user",
+          JSON.stringify({
+            ...teacher,
+            role: "faculty",
+          })
+        );
+        window.dispatchEvent(new Event("local-auth-change"));
         toast.success(`Welcome back, ${teacher.full_name}`);
-        navigate({ to: "/dashboard", replace: true });
+        navigate({ to: safeNext as any, replace: true });
       } else {
-        toast.error("Check the ID and the password.");
+        toast.error("Check the Employee ID and password.");
       }
-    }, 800);
+    }, 600);
   }
 
   async function handleAdminLogin(e: React.FormEvent) {
@@ -69,26 +90,29 @@ function AuthPage() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      if (empId.toLowerCase() === "admin" && password === "admin123") {
-        localStorage.setItem("mock_user", JSON.stringify({
-          id: "admin-1",
-          full_name: "Super Admin",
-          employee_id: "ADMIN",
-          department: "Examination Cell",
-          role: "admin"
-        }));
+      if (adminId.trim().toLowerCase() === "admin" && adminPassword === "admin123") {
+        localStorage.setItem(
+          "mock_user",
+          JSON.stringify({
+            id: "admin-1",
+            full_name: "Super Admin",
+            employee_id: "ADMIN",
+            department: "Examination Cell",
+            role: "admin",
+          })
+        );
+        window.dispatchEvent(new Event("local-auth-change"));
         toast.success("Welcome, Administrator");
-        navigate({ to: "/dashboard", replace: true });
+        navigate({ to: safeNext as any, replace: true });
       } else {
         toast.error("Invalid Admin credentials. Use admin / admin123");
       }
-    }, 800);
+    }, 600);
   }
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-secondary px-4 py-10 sm:py-12">
       <div className="glass-strong w-full max-w-md rounded-2xl p-5 sm:p-8">
-        
         {/* Header */}
         <div className="flex flex-col items-center gap-2 text-center mb-6">
           <img src="/snpsu-logo.png" alt="Sapthagiri NPS University" className="size-16 object-contain mb-1" />
@@ -105,24 +129,41 @@ function AuthPage() {
           <TabsContent value="faculty">
             <form onSubmit={handleFacultyLogin} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="empId">Employee ID</Label>
+                <Label htmlFor="facultyEmpId">Employee ID</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="empId" placeholder="e.g. EMP1001" value={empId} onChange={e => setEmpId(e.target.value)} required className="pl-9 bg-background/50" />
+                  <Input
+                    id="facultyEmpId"
+                    placeholder="e.g. EMP1001"
+                    value={facultyEmpId}
+                    onChange={(e) => setFacultyEmpId(e.target.value)}
+                    required
+                    className="pl-9 bg-background/50"
+                  />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="facultyPassword">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required className="pl-9 pr-10 bg-background/50" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <Input
+                    id="facultyPassword"
+                    type={showFacultyPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={facultyPassword}
+                    onChange={(e) => setFacultyPassword(e.target.value)}
+                    required
+                    className="pl-9 pr-10 bg-background/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFacultyPassword(!showFacultyPassword)}
+                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {showFacultyPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
               </div>
-              
-
 
               <Button type="submit" className="w-full btn-3d mt-2" disabled={loading}>
                 {loading ? "Authenticating..." : "Access Faculty Dashboard"}
@@ -136,21 +177,38 @@ function AuthPage() {
                 <Label htmlFor="adminId">Admin ID</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="adminId" placeholder="admin" value={empId} onChange={e => setEmpId(e.target.value)} required className="pl-9 bg-background/50" />
+                  <Input
+                    id="adminId"
+                    placeholder="admin"
+                    value={adminId}
+                    onChange={(e) => setAdminId(e.target.value)}
+                    required
+                    className="pl-9 bg-background/50"
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="adminPassword">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input id="adminPassword" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required className="pl-9 pr-10 bg-background/50" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <Input
+                    id="adminPassword"
+                    type={showAdminPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    required
+                    className="pl-9 pr-10 bg-background/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    {showAdminPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
               </div>
-              
-
 
               <Button type="submit" className="w-full btn-3d mt-2" disabled={loading}>
                 {loading ? "Authenticating..." : "Enter Exam Cell"}
