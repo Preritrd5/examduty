@@ -12,6 +12,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Clock,
+  Download,
   Users,
   Building2,
   Layers,
@@ -577,7 +578,7 @@ function TimetableAllocationPage() {
   const currentAttendanceSession = attendanceData?.session;
 
   return (
-    <AppShell>
+    <AppShell title="Timetable & Allocation" description="Student Segmentation, Faculty Allocation & Attendance Register">
       <div className="space-y-6 pb-16">
         {/* HEADER SECTION */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border pb-5">

@@ -274,44 +274,43 @@ const MOCK_EMERGENCIES = [
   },
 ];
 
-// Initial user duties
-let stateMyDuties = [
-  {
-    allocation_id: "alloc-101",
-    duty_role: "primary",
-    status: "accepted",
-    exam_id: "exam-1",
-    exam_name: "IA-1 Internal Assessment",
-    exam_date: todayStr,
-    start_time: "10:00 AM",
-    duration_minutes: 90,
-    hall: "Block A-H-101",
-    floor: 1,
-    alert_raised: false,
-  },
-  {
-    allocation_id: "alloc-102",
-    duty_role: "secondary",
-    status: "accepted",
-    exam_id: "exam-2",
-    exam_name: "Midterm Examination 2026",
-    exam_date: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
-    start_time: "09:30 AM",
-    duration_minutes: 120,
-    hall: "Block B-H-201",
-    floor: 2,
-    alert_raised: false,
-  },
-];
+// Initial room allocations linking exam-1 to rooms and faculty
+const INITIAL_ALLOCATIONS = Array.from({ length: 12 }, (_, i) => {
+  const room = MOCK_ROOMS[i];
+  const primaryTeacher = MOCK_TEACHERS[i * 2]; // EMP1001, EMP1003, etc.
+  const secondaryTeacher = MOCK_TEACHERS[i * 2 + 1]; // EMP1002, EMP1004, etc.
+  return [
+    {
+      id: `alloc-exam-1-${i * 2}`,
+      exam_id: "exam-1",
+      room_id: room.id,
+      teacher_id: primaryTeacher.id,
+      duty_role: "primary",
+      status: "accepted",
+      floor: room.floor,
+      cross_dept_fallback: false,
+    },
+    {
+      id: `alloc-exam-1-${i * 2 + 1}`,
+      exam_id: "exam-1",
+      room_id: room.id,
+      teacher_id: secondaryTeacher.id,
+      duty_role: "secondary",
+      status: "accepted",
+      floor: room.floor,
+      cross_dept_fallback: false,
+    },
+  ];
+}).flat();
 
 // In-memory state storage for dynamic additions and edits
 let stateExams = [...MOCK_EXAMS];
 let stateRooms = [...MOCK_ROOMS];
-let stateStudents: any[] = [];
+let stateStudents = [...MOCK_STUDENTS];
 let stateTeachers = [...MOCK_TEACHERS];
 let stateStaffRequests = [...MOCK_STAFF_REQUESTS];
 let stateEmergencies = [...MOCK_EMERGENCIES];
-let stateAllocations: any[] = [];
+let stateAllocations: any[] = [...INITIAL_ALLOCATIONS];
 let stateAdminNotices: any[] = [
   {
     id: "notice-1",
@@ -325,6 +324,7 @@ let stateSettings = {
   two_invigilator_threshold: 40,
   standby_percentage: 10,
   reporting_minutes: 30,
+  attendance_window_minutes: 15,
   max_duties: 6,
 };
 
@@ -391,46 +391,89 @@ export const getMe = createServerFn({ method: "GET" })
 export const getDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayExamsList = stateExams.filter(
+      (e) => e.exam_date === todayStr && e.status !== "cancelled"
+    );
+    const upcomingExamsList = stateExams.filter(
+      (e) => e.exam_date >= todayStr && e.status !== "cancelled"
+    );
+
+    const activeRooms = stateRooms.filter((r) => r.active !== false);
+    const roomsInUseToday = Math.min(
+      activeRooms.length,
+      todayExamsList.reduce((acc, e) => acc + (e.rooms || 0), 0)
+    );
+
+    const activeTeachers = stateTeachers.filter((t) => t.active !== false);
+    const todayAllocCount = stateAllocations.filter((a) => {
+      const e = stateExams.find((ex) => ex.id === a.exam_id);
+      return e?.exam_date === todayStr;
+    }).length;
+    const assignedToday = todayAllocCount > 0 ? todayAllocCount : todayExamsList.reduce((acc, e) => acc + (e.duties || 0), 0);
+    const standbyPercentage = stateSettings?.standby_percentage ?? 10;
+    const standbyToday = Math.max(1, Math.round((roomsInUseToday * standbyPercentage) / 100));
+
+    const pendingAcceptance = stateStaffRequests.filter((r) => r.status === "pending").length;
+    const acceptedDuties = stateStaffRequests.filter((r) => r.status === "approved").length;
+    const declinedDuties = stateStaffRequests.filter((r) => r.status === "rejected").length;
+
     const cardsObj = {
-      todaysExams: 2,
-      upcomingExams: stateExams.length,
-      totalRooms: stateRooms.length,
-      roomsInUseToday: 12,
-      teachers: stateTeachers.length,
-      assignedToday: 24,
-      standbyToday: 6,
-      pendingAcceptance: 3,
-      acceptedDuties: 21,
-      declinedDuties: 1,
+      todaysExams: todayExamsList.length,
+      upcomingExams: upcomingExamsList.length,
+      totalRooms: activeRooms.length,
+      roomsInUseToday,
+      teachers: activeTeachers.length,
+      assignedToday,
+      standbyToday,
+      pendingAcceptance,
+      acceptedDuties,
+      declinedDuties,
     };
 
-    // Build departments live from stateTeachers, each faculty with their allocated room
+    // Build departments live from activeTeachers
     const deptMap = new Map<string, { name: string; room: string }[]>();
-    stateTeachers.forEach((t, idx) => {
+    activeTeachers.forEach((t, idx) => {
       const dept = t.department || "General";
-      const room = stateRooms[idx % stateRooms.length]?.room_number ?? `A-${101 + idx}`;
+      const room = activeRooms[idx % activeRooms.length]?.room_number ?? `A-${101 + idx}`;
       if (!deptMap.has(dept)) deptMap.set(dept, []);
       deptMap.get(dept)!.push({ name: t.full_name, room });
     });
     const departments = Array.from(deptMap.entries()).map(([name, members]) => ({
       name,
       value: members.length,
-      faculty: members, // [{name, room}] — all members
+      faculty: members,
     }));
+
+    // Workload top faculty dynamically derived from real stateAllocations & teacher records
+    const dutyCountsFromAlloc: Record<string, number> = {};
+    for (const a of stateAllocations) {
+      dutyCountsFromAlloc[a.teacher_id] = (dutyCountsFromAlloc[a.teacher_id] || 0) + 1;
+    }
+    const workload = [...activeTeachers]
+      .sort((a, b) => ((dutyCountsFromAlloc[b.id] ?? b.duties ?? 0) - (dutyCountsFromAlloc[a.id] ?? a.duties ?? 0)))
+      .slice(0, 5)
+      .map((t) => ({ name: t.full_name, duties: dutyCountsFromAlloc[t.id] ?? t.duties ?? 0 }));
+
+    // Floor distribution calculated dynamically from actual allocations or active rooms per floor
+    const floors = Array.from({ length: 5 }, (_, i) => {
+      const floorNum = i + 1;
+      const allocsOnFloor = stateAllocations.filter((a) => {
+        const r = stateRooms.find((rm) => rm.id === a.room_id);
+        const e = stateExams.find((ex) => ex.id === a.exam_id);
+        return e?.exam_date === todayStr && ((a.floor ?? r?.floor) === floorNum);
+      }).length;
+      const floorRooms = activeRooms.filter((r) => r.floor === floorNum);
+      return { floor: `F${floorNum}`, duties: allocsOnFloor > 0 ? allocsOnFloor : floorRooms.length * 2 };
+    });
 
     return {
       cards: cardsObj,
       metrics: cardsObj,
-      workload: [
-        { name: "Dr. Aarav Sharma", duties: 8 },
-        { name: "Dr. Ananya Verma", duties: 7 },
-        { name: "Prof. Amit Patel", duties: 6 },
-        { name: "Mr. Rajesh Kumar", duties: 5 },
-        { name: "Dr. Chetan Singh", duties: 4 },
-      ],
+      workload,
       departments,
-      floors: Array.from({ length: 5 }, (_, i) => ({ floor: `F${i + 1}`, duties: 8 })),
-      upcoming: stateExams.slice(0, 5),
+      floors,
+      upcoming: upcomingExamsList.slice(0, 5),
     };
   });
 
@@ -984,35 +1027,41 @@ export const myDuties = createServerFn({ method: "POST" })
     z.object({ teacherId: z.string().optional() }).optional().parse(input || {})
   )
   .handler(async ({ data, context }) => {
-    const targetTeacherId = data?.teacherId || (context?.userId !== "demo-admin-id" ? context?.userId : undefined);
-    const allocations = targetTeacherId
-      ? stateAllocations.filter((a) => a.teacher_id === targetTeacherId)
-      : [];
-
-    if (allocations.length > 0) {
-      return allocations.map((a) => {
-        const exam = stateExams.find((e) => e.id === a.exam_id);
-        const room = stateRooms.find((r) => r.id === a.room_id);
-        return {
-          allocation_id: a.id,
-          duty_role: a.duty_role,
-          status: a.status,
-          exam_id: a.exam_id,
-          exam_name: exam?.name || "Unknown Exam",
-          exam_date: exam?.exam_date || new Date().toISOString().split("T")[0],
-          start_time: exam?.start_time || "10:00 AM",
-          duration_minutes: exam?.exam_type === "internal" ? 90 : 180,
-          room_id: room?.id,
-          hall: room ? `Block ${room.block} - ${room.room_number}` : "Unknown Room",
-          floor: room?.floor || 1,
-          alert_raised: false,
-          department: exam?.department || "General",
-        };
-      });
+    const rawTarget = data?.teacherId || (context?.userId !== "demo-admin-id" ? context?.userId : undefined);
+    const targetTeacherId = (rawTarget || "").trim();
+    if (!targetTeacherId) {
+      return [];
     }
 
-    // Fallback to mock duties for demo purposes if admin hasn't generated any yet
-    return stateMyDuties;
+    const teacher = stateTeachers.find(
+      (t) =>
+        t.id === targetTeacherId ||
+        t.employee_id === targetTeacherId ||
+        t.id.toLowerCase() === targetTeacherId.toLowerCase() ||
+        (t.employee_id && t.employee_id.toLowerCase() === targetTeacherId.toLowerCase())
+    );
+    const validIds = new Set([targetTeacherId, teacher?.id, teacher?.employee_id].filter(Boolean));
+    const allocations = stateAllocations.filter((a) => validIds.has(a.teacher_id));
+
+    return allocations.map((a) => {
+      const exam = stateExams.find((e) => e.id === a.exam_id);
+      const room = stateRooms.find((r) => r.id === a.room_id);
+      return {
+        allocation_id: a.id,
+        duty_role: a.duty_role,
+        status: a.status,
+        exam_id: a.exam_id,
+        exam_name: exam?.name || "Unknown Exam",
+        exam_date: exam?.exam_date || new Date().toISOString().split("T")[0],
+        start_time: exam?.start_time || "10:00 AM",
+        duration_minutes: exam?.exam_type === "internal" ? 90 : 180,
+        room_id: room?.id,
+        hall: room ? `Block ${room.block} - ${room.room_number}` : "Unknown Room",
+        floor: room?.floor || 1,
+        alert_raised: Boolean(a.alert_raised),
+        department: exam?.department || "General",
+      };
+    });
   });
 
 export const updateProfile = createServerFn({ method: "POST" })
@@ -1111,19 +1160,33 @@ export const raiseEmergency = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => emergencyRaiseSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const duty = stateMyDuties.find((d) => d.allocation_id === data.allocationId);
+    const duty = stateAllocations.find((d) => d.id === data.allocationId);
     if (duty) duty.alert_raised = true;
 
-    // Fetch user details
-    let userName = "Dr. Aarav Sharma";
-    let userDept = "Computer Science";
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.user_metadata?.full_name) userName = user.user_metadata.full_name;
-      if (user?.user_metadata?.department) userDept = user.user_metadata.department;
-    } catch {
-      // Fallback to demo teacher
+    // Fetch user details dynamically from stateTeachers or auth context
+    let userName = "Faculty Member";
+    let userDept = "General";
+    const teacher = stateTeachers.find(
+      (t) =>
+        t.id === userId ||
+        t.employee_id === userId ||
+        (userId && t.id.toLowerCase() === userId.toLowerCase())
+    );
+    if (teacher) {
+      userName = teacher.full_name;
+      userDept = teacher.department;
+    } else {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.user_metadata?.full_name) userName = user.user_metadata.full_name;
+        if (user?.user_metadata?.department) userDept = user.user_metadata.department;
+      } catch {
+        // Fallback
+      }
     }
+
+    const exam = duty ? stateExams.find((e) => e.id === duty.exam_id) : null;
+    const room = duty ? stateRooms.find((r) => r.id === duty.room_id) : null;
 
     stateEmergencies.unshift({
       id: `emerg-${Date.now()}`,
@@ -1132,14 +1195,14 @@ export const raiseEmergency = createServerFn({ method: "POST" })
       created_at: new Date().toISOString(),
       admin_read_at: null,
       exam_id: duty?.exam_id || "exam-1",
-      room_id: "room-1",
-      exam_name: duty?.exam_name || "IA-1 Internal Assessment",
-      exam_date: duty?.exam_date || todayStr,
-      start_time: duty?.start_time || "10:00 AM",
-      hall: duty?.hall || "Hall A-101",
+      room_id: duty?.room_id || "room-1",
+      exam_name: exam?.name || "IA-1 Internal Assessment",
+      exam_date: exam?.exam_date || todayStr,
+      start_time: exam?.start_time || "10:00 AM",
+      hall: room ? `Block ${room.block} - ${room.room_number}` : (data.allocationId.replace("room-", "") || "Hall A-101"),
       raised_by: `${userName} (${userDept})`,
       original_teacher: userName,
-      original_teacher_id: userId || "teacher-1",
+      original_teacher_id: userId || teacher?.id || "teacher-1",
       replacement: null,
     });
 

@@ -34,6 +34,7 @@ function SettingsPage() {
 
   const [form, setForm] = useState({
     reporting_minutes: 30,
+    attendance_window_minutes: 15,
     standby_percentage: 10,
     two_invigilator_threshold: 40,
     max_duties: 12,
@@ -42,10 +43,11 @@ function SettingsPage() {
   useEffect(() => {
     if (data) {
       setForm({
-        reporting_minutes: data.reporting_minutes,
-        standby_percentage: data.standby_percentage,
-        two_invigilator_threshold: data.two_invigilator_threshold,
-        max_duties: data.max_duties,
+        reporting_minutes: data.reporting_minutes ?? 30,
+        attendance_window_minutes: data.attendance_window_minutes ?? 15,
+        standby_percentage: data.standby_percentage ?? 10,
+        two_invigilator_threshold: data.two_invigilator_threshold ?? 40,
+        max_duties: data.max_duties ?? 12,
       });
     }
   }, [data]);
@@ -61,6 +63,7 @@ function SettingsPage() {
 
   const fields = [
     ["reporting_minutes", "Reporting time before exam (minutes)"],
+    ["attendance_window_minutes", "Attendance marking window (minutes)"],
     ["standby_percentage", "Standby reserve (% of halls)"],
     ["two_invigilator_threshold", "Students above which a hall needs two invigilators"],
     ["max_duties", "Default maximum duties per faculty"],

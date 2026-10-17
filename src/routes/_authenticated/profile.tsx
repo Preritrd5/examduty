@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { AppShell, useMe } from "@/components/AppShell";
 import { updateProfile } from "@/lib/invigilation.functions";
+import { getTabSession, setTabSession } from "@/lib/auth-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,12 +18,7 @@ export const Route = createFileRoute("/_authenticated/profile")({
 });
 
 function readMockUser() {
-  try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem("mock_user") : null;
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  return getTabSession();
 }
 
 function facultyRecordId(me: any) {
@@ -65,6 +61,14 @@ function ProfilePage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
+    const onTabAuthChange = () => {
+      setMockUser(readMockUser());
+    };
+    window.addEventListener("tab-auth-change", onTabAuthChange);
+    return () => window.removeEventListener("tab-auth-change", onTabAuthChange);
+  }, []);
+
+  useEffect(() => {
     const p = { ...(meServer?.profile || {}), ...(mockUser || {}) } as any;
     setPhone(p.phone || "");
     setOffice(p.office || "");
@@ -83,21 +87,15 @@ function ProfilePage() {
       if (res.ok) {
         toast.success("Profile updated successfully!");
         
-        // Sync local storage if using mock user
-        const mockUserStr = localStorage.getItem("mock_user");
-        if (mockUserStr) {
-          try {
-            const currentMock = JSON.parse(mockUserStr);
-            const updatedMock = { ...currentMock, ...variables };
-            if (variables.avatar_url !== undefined) updatedMock.avatar_url = variables.avatar_url;
-            if (variables.banner_url !== undefined) updatedMock.banner_url = variables.banner_url;
-            if (variables.password !== undefined) updatedMock.password = variables.password;
-            localStorage.setItem("mock_user", JSON.stringify(updatedMock));
-            window.dispatchEvent(new Event("local-auth-change"));
-            setMockUser(updatedMock);
-          } catch (e) {
-            console.error("Failed to sync mock_user in localStorage", e);
-          }
+        // Sync tab-isolated session
+        const currentTab = getTabSession();
+        if (currentTab) {
+          const updatedMock = { ...currentTab, ...variables };
+          if (variables.avatar_url !== undefined) updatedMock.avatar_url = variables.avatar_url;
+          if (variables.banner_url !== undefined) updatedMock.banner_url = variables.banner_url;
+          if (variables.password !== undefined) updatedMock.password = variables.password;
+          setTabSession(updatedMock);
+          setMockUser(updatedMock);
         }
 
         queryClient.invalidateQueries({ queryKey: ["me"] });

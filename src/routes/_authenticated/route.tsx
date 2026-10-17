@@ -12,18 +12,12 @@ export const Route = createFileRoute("/_authenticated")({
       // Fallthrough
     }
 
-    // 2. Check local mock_user session (client-side)
+    // 2. Check tab-isolated session (client-side)
     if (typeof window !== "undefined") {
-      const raw = localStorage.getItem("mock_user");
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed && (parsed.id || parsed.employee_id)) {
-            return { user: parsed };
-          }
-        } catch {
-          localStorage.removeItem("mock_user");
-        }
+      const { getTabSession } = await import("@/lib/auth-session");
+      const session = getTabSession();
+      if (session && (session.id || session.employee_id)) {
+        return { user: session };
       }
 
       // No active session — redirect directly to /auth with next parameter

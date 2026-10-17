@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getTabSession, setTabSession } from "@/lib/auth-session";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -39,18 +40,11 @@ function AuthPage() {
   const [teachers, setTeachers] = useState<any[]>([]);
 
   useEffect(() => {
-    // Check if already logged in
-    const mockUser = localStorage.getItem("mock_user");
-    if (mockUser) {
-      try {
-        const u = JSON.parse(mockUser);
-        if (u && (u.id || u.employee_id)) {
-          navigate({ to: safeNext as any, replace: true });
-          return;
-        }
-      } catch {
-        localStorage.removeItem("mock_user");
-      }
+    // Check if current tab is already logged in
+    const user = getTabSession();
+    if (user && (user.id || user.employee_id)) {
+      navigate({ to: safeNext as any, replace: true });
+      return;
     }
 
     // Load mock teachers for demo
@@ -69,14 +63,10 @@ function AuthPage() {
         teachers.find((t) => String(t.id || "").toUpperCase() === upperId);
 
       if (teacher && facultyPassword === teacher.password) {
-        localStorage.setItem(
-          "mock_user",
-          JSON.stringify({
-            ...teacher,
-            role: "faculty",
-          })
-        );
-        window.dispatchEvent(new Event("local-auth-change"));
+        setTabSession({
+          ...teacher,
+          role: "faculty",
+        });
         toast.success(`Welcome back, ${teacher.full_name}`);
         navigate({ to: safeNext as any, replace: true });
       } else {
@@ -91,17 +81,13 @@ function AuthPage() {
     setTimeout(() => {
       setLoading(false);
       if (adminId.trim().toLowerCase() === "admin" && adminPassword === "admin123") {
-        localStorage.setItem(
-          "mock_user",
-          JSON.stringify({
-            id: "admin-1",
-            full_name: "Super Admin",
-            employee_id: "ADMIN",
-            department: "Examination Cell",
-            role: "admin",
-          })
-        );
-        window.dispatchEvent(new Event("local-auth-change"));
+        setTabSession({
+          id: "admin-1",
+          full_name: "Super Admin",
+          employee_id: "ADMIN",
+          department: "Examination Cell",
+          role: "admin",
+        });
         toast.success("Welcome, Administrator");
         navigate({ to: safeNext as any, replace: true });
       } else {

@@ -14,7 +14,7 @@ export const examSchema = z.object({
 
 export const settingsSchema = z.object({
   reporting_minutes: z.number().int().min(0).max(120),
-  attendance_window_minutes: z.number().int().min(0).max(120),
+  attendance_window_minutes: z.number().int().min(0).max(120).default(15).optional(),
   max_duties: z.number().int().min(1).max(60),
   standby_percentage: z.number().int().min(0).max(100),
   two_invigilator_threshold: z.number().int().min(1).max(500),

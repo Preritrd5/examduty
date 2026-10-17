@@ -40,6 +40,9 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
+import { toast } from "sonner";
+import { getTabSession, setTabSession, clearTabSession } from "@/lib/auth-session";
+
 const NAV = [
   { to: "/dashboard", label: "Control Centre", icon: LayoutDashboard },
   { to: "/academic-calendar", label: "Academic Timeline", icon: CalendarRange },
@@ -70,39 +73,19 @@ const ADMIN_ONLY = new Set<string>([
 export function useMe() {
   const fn = useServerFn(getMe);
   const query = useQuery({ queryKey: ["me"], queryFn: () => fn(), retry: false });
-  const [mockUser, setMockUser] = useState<any>(() => {
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem("mock_user") : null;
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [mockUser, setMockUser] = useState<any>(() => getTabSession());
 
   useEffect(() => {
     const syncUser = () => {
-      try {
-        const raw = localStorage.getItem("mock_user");
-        setMockUser(raw ? JSON.parse(raw) : null);
-      } catch {
-        setMockUser(null);
-      }
+      setMockUser(getTabSession());
     };
 
     syncUser();
 
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "mock_user" || e.key === null) {
-        syncUser();
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("local-auth-change", syncUser);
+    window.addEventListener("tab-auth-change", syncUser);
 
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("local-auth-change", syncUser);
+      window.removeEventListener("tab-auth-change", syncUser);
     };
   }, []);
 
@@ -145,13 +128,13 @@ export function AppShell({
   const { data: me } = useMe();
   const [hasSession, setHasSession] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    return Boolean(localStorage.getItem("mock_user"));
+    return Boolean(getTabSession());
   });
 
   useEffect(() => {
     const handleAuthSync = () => {
-      const raw = localStorage.getItem("mock_user");
-      if (!raw) {
+      const session = getTabSession();
+      if (!session) {
         setHasSession(false);
         queryClient.clear();
         navigate({
@@ -162,45 +145,24 @@ export function AppShell({
         return;
       }
 
-      try {
-        const parsed = JSON.parse(raw);
-        setHasSession(true);
-        // If current role is faculty and current page is restricted to Admin, safely route to /dashboard
-        if (parsed.role !== "admin" && ADMIN_ONLY.has(pathname)) {
-          navigate({ to: "/dashboard", replace: true });
-        }
-      } catch {
-        setHasSession(false);
-        localStorage.removeItem("mock_user");
-        queryClient.clear();
-        navigate({
-          to: "/auth",
-          search: { next: pathname !== "/auth" ? pathname : undefined },
-          replace: true,
-        });
+      setHasSession(true);
+      // If current role is faculty and current page is restricted to Admin, safely route to /dashboard
+      if (session.role !== "admin" && ADMIN_ONLY.has(pathname)) {
+        navigate({ to: "/dashboard", replace: true });
       }
     };
 
     handleAuthSync();
 
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "mock_user" || e.key === null) {
-        queryClient.invalidateQueries();
-        handleAuthSync();
-      }
-    };
-
-    const onLocalAuthChange = () => {
+    const onTabAuthChange = () => {
       queryClient.invalidateQueries();
       handleAuthSync();
     };
 
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("local-auth-change", onLocalAuthChange);
+    window.addEventListener("tab-auth-change", onTabAuthChange);
 
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("local-auth-change", onLocalAuthChange);
+      window.removeEventListener("tab-auth-change", onTabAuthChange);
     };
   }, [pathname, navigate, queryClient]);
 
@@ -237,8 +199,7 @@ export function AppShell({
   async function signOut() {
     await queryClient.cancelQueries();
     queryClient.clear();
-    localStorage.removeItem("mock_user");
-    window.dispatchEvent(new Event("local-auth-change"));
+    clearTabSession();
     navigate({ to: "/auth", replace: true });
   }
 
@@ -298,33 +259,74 @@ export function AppShell({
           </div>
         </div>
 
-        {/* Portal Role Indicator - 3D Accent */}
+        {/* Portal Role Indicator - 3D Accent with Tab-Scoped Switcher */}
         <div className="px-3 pt-3">
           {isAdmin ? (
-            <div className="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-500/20 to-sky-500/10 px-3 py-2.5 text-xs text-indigo-200 font-semibold flex items-center gap-2.5 shadow-md card-3d glow-pulse-indigo">
-              <div className="size-6 rounded-lg bg-indigo-500/30 flex items-center justify-center border border-indigo-400/40 floating-3d shrink-0">
-                <Shield className="size-3.5 text-indigo-300" />
+            <div className="rounded-xl border border-indigo-500/40 bg-gradient-to-r from-indigo-500/20 to-sky-500/10 p-2.5 text-xs text-indigo-200 font-semibold flex flex-col gap-2 shadow-md card-3d glow-pulse-indigo">
+              <div className="flex items-center gap-2.5">
+                <div className="size-6 rounded-lg bg-indigo-500/30 flex items-center justify-center border border-indigo-400/40 floating-3d shrink-0">
+                  <Shield className="size-3.5 text-indigo-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="leading-tight font-bold text-white flex items-center gap-1.5">
+                    <span>Admin Portal</span>
+                    <span className="size-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                  </p>
+                  <p className="text-[10px] text-indigo-200/80 font-normal">Superuser Controls Active</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="leading-tight font-bold text-white flex items-center gap-1.5">
-                  <span>Admin Portal</span>
-                  <span className="size-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                </p>
-                <p className="text-[10px] text-indigo-200/80 font-normal">Superuser Controls Active</p>
-              </div>
+              {/* <button
+                type="button"
+                onClick={() => {
+                  setTabSession({
+                    id: "EMP1001",
+                    employee_id: "EMP1001",
+                    full_name: "Dr. Aarav Sharma",
+                    department: "Computer Science",
+                    designation: "Assistant Professor",
+                    role: "faculty",
+                  });
+                  toast.success("Switched this tab to Faculty (Dr. Aarav Sharma)");
+                }}
+                className="w-full py-1 px-2 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/90 border border-indigo-400/30 text-[10px] text-indigo-100 font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                title="Switch this specific browser tab to Faculty without affecting any other open tabs"
+              >
+                <ArrowLeftRight className="size-3" />
+                <span>Switch Tab to Faculty</span>
+              </button> */}
             </div>
           ) : (
-            <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 px-3 py-2.5 text-xs text-amber-200 font-semibold flex items-center gap-2.5 shadow-md card-3d">
-              <div className="size-6 rounded-lg bg-amber-500/30 flex items-center justify-center border border-amber-400/40 floating-3d shrink-0">
-                <GraduationCap className="size-3.5 text-amber-300" />
+            <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 p-2.5 text-xs text-amber-200 font-semibold flex flex-col gap-2 shadow-md card-3d">
+              <div className="flex items-center gap-2.5">
+                <div className="size-6 rounded-lg bg-amber-500/30 flex items-center justify-center border border-amber-400/40 floating-3d shrink-0">
+                  <GraduationCap className="size-3.5 text-amber-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="leading-tight font-bold text-white flex items-center gap-1.5">
+                    <span>Faculty Portal</span>
+                    <span className="size-1.5 rounded-full bg-amber-400 inline-block" />
+                  </p>
+                  <p className="text-[10px] text-amber-200/80 font-normal">Teacher Mode · Read Only</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="leading-tight font-bold text-white flex items-center gap-1.5">
-                  <span>Faculty Portal</span>
-                  <span className="size-1.5 rounded-full bg-amber-400 inline-block" />
-                </p>
-                <p className="text-[10px] text-amber-200/80 font-normal">Teacher Mode · Read Only</p>
-              </div>
+              {/* <button
+                type="button"
+                onClick={() => {
+                  setTabSession({
+                    id: "admin-1",
+                    employee_id: "ADMIN",
+                    full_name: "Super Admin",
+                    department: "Examination Cell",
+                    role: "admin",
+                  });
+                  toast.success("Switched this tab to Super Admin");
+                }}
+                className="w-full py-1 px-2 rounded-lg bg-amber-950/70 hover:bg-amber-900/90 border border-amber-400/30 text-[10px] text-amber-100 font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                title="Switch this specific browser tab to Super Admin without affecting any other open tabs"
+              >
+                <ArrowLeftRight className="size-3" />
+                <span>Switch Tab to Admin</span>
+              </button> */}
             </div>
           )}
         </div>
@@ -466,6 +468,44 @@ export function AppShell({
                     <span>My Profile</span>
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {/* {isAdmin ? (
+                  <DropdownMenuItem
+                    className="cursor-pointer text-amber-500 focus:bg-amber-50 focus:text-amber-600"
+                    onClick={() => {
+                      setTabSession({
+                        id: "EMP1001",
+                        employee_id: "EMP1001",
+                        full_name: "Dr. Aarav Sharma",
+                        department: "Computer Science",
+                        designation: "Assistant Professor",
+                        role: "faculty",
+                      });
+                      toast.success("Switched this tab to Faculty (Dr. Aarav Sharma)");
+                    }}
+                  >
+                    <GraduationCap className="mr-2 h-4 w-4" />
+                    <span>Switch tab to Faculty</span>
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    className="cursor-pointer text-indigo-500 focus:bg-indigo-50 focus:text-indigo-600"
+                    onClick={() => {
+                      setTabSession({
+                        id: "admin-1",
+                        employee_id: "ADMIN",
+                        full_name: "Super Admin",
+                        department: "Examination Cell",
+                        role: "admin",
+                      });
+                      toast.success("Switched this tab to Super Admin");
+                    }}
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    <span>Switch tab to Admin</span>
+                  </DropdownMenuItem>
+                )} */}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer text-rose-500 focus:bg-rose-50 focus:text-rose-600" onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sign out</span>
